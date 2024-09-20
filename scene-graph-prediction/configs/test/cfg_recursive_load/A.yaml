@@ -1,0 +1,4 @@
+OUTPUT_DIR: "A"
+INPUT:
+  N_DIM: -1
+GLOVE_DIR: "A"

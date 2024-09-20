@@ -1,0 +1,2 @@
+OUTPUT_DIR: "F"
+BASE_CFG: "../configs/test/cfg_recursive_load/F.yaml"

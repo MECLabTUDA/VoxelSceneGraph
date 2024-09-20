@@ -1,0 +1,8 @@
+pycocotools3d/*.pyc
+pycocotools3d/_masks/*.pyc
+pycocotools3d/_masks/*.c
+pycocotools3d/_masks/*.so
+pycocotools3d/_masks/*.pyd
+
+dist/
+*.egg-info

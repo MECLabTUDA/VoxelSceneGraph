@@ -1,0 +1,1 @@
+{"type": "radiology", "classes": [{"id": 1, "name": "Bleeding", "attributes": [], "has_mask": true, "is_unique": false, "is_ignored": false, "color": "#ffa602"}], "image": [], "rules": [], "window_center": 50, "window_width": 100, "default_axis": "axial", "hash": 3303451795596376569}

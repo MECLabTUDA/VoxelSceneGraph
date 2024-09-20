@@ -1,0 +1,4 @@
+OUTPUT_DIR: "E"
+INPUT:
+  N_DIM: -1
+BASE_CFG: "../configs/test/cfg_recursive_load/D.yaml"

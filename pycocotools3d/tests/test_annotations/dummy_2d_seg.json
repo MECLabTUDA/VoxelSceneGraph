@@ -1,0 +1,77 @@
+{
+  "info": {
+    "description": "COCO 2017 Dataset",
+    "url": "http://cocodataset.org",
+    "version": "1.0",
+    "year": 2017,
+    "contributor": "COCO Consortium",
+    "date_created": "2017/09/01"
+  },
+  "licenses": [
+    {
+      "url": "http://creativecommons.org/licenses/by-nc-sa/2.0/",
+      "id": 1,
+      "name": "Attribution-NonCommercial-ShareAlike License"
+    },
+    {
+      "url": "http://creativecommons.org/licenses/by-nc/2.0/",
+      "id": 2,
+      "name": "Attribution-NonCommercial License"
+    }
+  ],
+  "images": [
+    {
+      "license": 2,
+      "file_name": "000000397133.jpg",
+      "height": 1280,
+      "width": 960,
+      "id": 1
+    },
+    {
+      "license": 1,
+      "file_name": "000000037777.jpg",
+      "height": 230,
+      "width": 352,
+      "id": 2
+    }
+  ],
+  "annotations": [
+    {
+      "image_id": 1,
+      "category_id": 1,
+      "bbox": [
+        660.6587524414062,
+        485.0489501953125,
+        10.61248779296875,
+        13.161041259765625
+      ],
+      "segmentation": {
+        "size": [
+          1280,
+          960
+        ],
+        "counts": "jXX>1mm03O1N10000000000001NY]mf0"
+      },
+      "id": 1,
+      "iscrowd": 0,
+      "area": 300
+    }
+  ],
+  "categories": [
+    {
+      "supercategory": "person",
+      "id": 1,
+      "name": "person"
+    },
+    {
+      "supercategory": "vehicle",
+      "id": 2,
+      "name": "vehicle"
+    },
+    {
+      "supercategory": "vehicle",
+      "id": 3,
+      "name": "car"
+    }
+  ]
+}

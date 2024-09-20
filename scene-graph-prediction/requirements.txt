@@ -1,0 +1,15 @@
+ninja
+yacs
+cython
+matplotlib
+tqdm
+pandas
+numpy<2.*
+Pillow
+h5py
+scipy
+opencv-python
+nibabel
+connected-components-3d
+scikit-learn
+pyyaml

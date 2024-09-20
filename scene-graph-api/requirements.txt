@@ -1,0 +1,17 @@
+numpy<2.*
+nibabel
+SimpleITK
+opencv-python
+typing-extensions
+tqdm
+referencing
+jsonpointer
+jsonschema  # Note: it's important that jsonschema is installed after referencing and jsonpointer
+Pillow
+click
+click-logging
+connected-components-3d
+tqdm
+# Optional:
+# torch for tensor structures (if required)
+# pycocotools3d for graph conversion to COCO format

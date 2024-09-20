@@ -1,0 +1,4 @@
+OUTPUT_DIR: "B"
+INPUT:
+  N_DIM: -2
+BASE_CFG: "../configs/test/cfg_recursive_load/A.yaml"
