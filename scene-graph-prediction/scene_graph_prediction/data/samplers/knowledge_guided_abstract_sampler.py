@@ -18,10 +18,10 @@ from scene_graph_prediction.structures import ImageList
 class KnowledgeGuidedAbstractSampler(BatchSampler, ABC):
     """
     Similar to a GroupedBatchSampler fused with a RandomSampler with replacement and with an IterationBasedBatchSampler,
-    but we sequentially select a group for a fixed number of iterations and directly sample images
-    with objects containing objects in this group.
+    but we sequentially select samples from a rotating list of groups for a fixed number of iterations.
     If strict_sampling, only the objects (or relations) selected for the group will be used for training.
 
+    Note: a batch may be smaller than intended, if no samples are available for a group.
     Note: these samplers also take care of the batch collation.
     Note: since we need to first compute the set of suitable images for each group, we cache this intermediate result.
     """
@@ -31,7 +31,7 @@ class KnowledgeGuidedAbstractSampler(BatchSampler, ABC):
             cfg: CfgNode,
             batch_size: int,
             n_groups: int,
-            iterations_per_group: int,
+            samples_per_group: int,
             start_batch: int,
             num_batches: int,
             strict_sampling: bool = False,
@@ -40,13 +40,12 @@ class KnowledgeGuidedAbstractSampler(BatchSampler, ABC):
         super().__init__([], batch_size, False)
         self.cfg = cfg
         self.n_groups = n_groups
-        self.iterations_per_group = iterations_per_group
+        self.samples_per_group = samples_per_group
         self.start_batch = start_batch
         self.num_batches = num_batches
         self.strict_sampling = strict_sampling
 
-        # Keep a state of what has been sampled
-        self.generator = None
+        # Keep a state for strict sampling
         self.current_group = 0
 
         # Don't try to load anything if the mapping is supplied
@@ -67,7 +66,7 @@ class KnowledgeGuidedAbstractSampler(BatchSampler, ABC):
 
         # Note: we might have a ConcatDataset
         data_statistics_name = type(self).__name__ + "_" + "".join(dataset_names) + "_groups"
-        save_file = save_dir / f"{data_statistics_name}.cache"
+        save_file = save_dir / f"{data_statistics_name}.json"
 
         if save_file.is_file():
             logger.info("Loading data groups from: " + save_file.as_posix())
@@ -92,46 +91,39 @@ class KnowledgeGuidedAbstractSampler(BatchSampler, ABC):
             json.dump(self.group_to_ids, f)
 
     def __iter__(self) -> Iterator[list[int]]:
-        if self.generator is None:
+        def sample_from_rotating_groups() -> Generator[int | None, None, None]:
             seed = int(torch.empty((), dtype=torch.int64).random_().item())
             generator = torch.Generator()
             generator.manual_seed(seed)
-        else:
-            generator = self.generator
 
-        group_randperm_generators = {
-            group_idx: self._infinite_randperm(len(self.group_to_ids[group_idx]), generator)
-            for group_idx in self.group_to_ids
-        }
+            group_randperm_generators = {
+                group_idx: self._infinite_randperm(len(self.group_to_ids[group_idx]), generator)
+                for group_idx in self.group_to_ids
+            }
 
-        yield [40]
-        yield [40]
-        yield [40]
-        yield [40]
-        yield [40]
-
-        batch = self.start_batch
-        while True:
-            # Check whether we need to update the currently selected group
-            for group_idx in range(self.n_groups):
-                self.current_group = group_idx
-                numel_group = len(self.group_to_ids[group_idx])
-                for _ in range(self.iterations_per_group):
-                    if batch >= self.num_batches:
-                        return
-
+            self.current_group = current_group_idx = 0
+            while True:
+                numel_group = len(self.group_to_ids[current_group_idx])
+                for _ in range(self.samples_per_group):
                     # Check whether there is any image for current group
                     if numel_group == 0:
-                        yield []
-                        batch += 1
-                        continue
+                        yield None
+                    else:
+                        sampled_group_idx = next(group_randperm_generators[current_group_idx])
+                        yield self.group_to_ids[current_group_idx][sampled_group_idx]
+                self.current_group = current_group_idx = (current_group_idx + 1) % self.n_groups
 
-                    # Sample a random batch with replacement
-                    yield [
-                        self.group_to_ids[group_idx][next(group_randperm_generators[group_idx])]
-                        for _ in range(self.batch_size)
-                    ]
-                    batch += 1
+        batch_idx = self.start_batch
+        batch_generator = sample_from_rotating_groups()
+
+        while True:
+            if batch_idx >= self.num_batches:
+                return
+
+            batch = [next(batch_generator) for _ in range(self.batch_size)]
+            # Filter out groups that have no samples
+            yield [idx for idx in batch if idx is not None]
+            batch_idx += 1
 
     @abstractmethod
     def _compute_group_ids_mapping(self, dataset: COCOEvaluableDataset) -> dict[int, list[int]]:

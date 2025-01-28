@@ -1,6 +1,7 @@
 import torch
 from yacs.config import CfgNode
 
+from scene_graph_prediction.modeling.utils.label_assignment import assign_label_to_proposals
 from scene_graph_prediction.structures import ImageList, BoxList, BoxListOps
 from .inference import build_retinanet_postprocessor
 from .loss import build_retinanet_loss_evaluator
@@ -10,7 +11,7 @@ from ...abstractions.box_head import BoxHeadTestProposals
 from ...abstractions.loss import RPNLossDict
 from ...abstractions.region_proposal import RPNHead, RPN, FeatureMapsBoundingBoxRegression, ClassWiseObjectness, \
     ImageAnchors, RPNProposals
-from ...utils import BoxCoder, IoUMatcher
+from ...utils import BoxCoder
 from ...utils.build_layers import build_conv, NormType
 
 
@@ -95,7 +96,9 @@ class RetinaNetModule(RPN[tuple[list[ImageAnchors], list[ClassWiseObjectness], F
         box_coder = BoxCoder(weights=(1.,) * self.n_dim + (1.,) * self.n_dim, n_dim=self.n_dim)
 
         # We only do region proposal (binary classification) if RPN only or this is the RPN for a two-stage method
-        self.is_binary_classification = cfg.MODEL.RPN_ONLY or cfg.MODEL.RETINANET.TWO_STAGE
+        self.is_binary_classification = cfg.MODEL.RETINANET.TWO_STAGE
+        if cfg.MODEL.RPN_ONLY:
+            assert self.is_binary_classification, "Only TWO_STAGE RetinaNets can be trained in RPN_ONLY mode."
 
         # Select anchor strides corresponding to selected feature maps
         selected_anchor_strides = tuple(anchor_strides[lvl] for lvl in self.selected_features_maps)
@@ -133,8 +136,14 @@ class RetinaNetModule(RPN[tuple[list[ImageAnchors], list[ClassWiseObjectness], F
             self.anchor_generator.num_anchors_per_level()
         )
 
-        # For relation detection, we need to assign GT labels, using an IoUMatcher with the relation head threshold
-        self.rel_object_matcher = IoUMatcher(cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD, 0.)
+        # Some processing is not required for training the object detector
+        #  e.g. produce the predicted semantic segmentation
+        # But this can be required for training later parts of the model, e.g. relation head...
+        self.training_requires_full_processing = (self.cfg.MODEL.BOX_ON or
+                                                  self.cfg.MODEL.ATTRIBUTE_ON or
+                                                  self.cfg.MODEL.MASK_ON or
+                                                  self.cfg.MODEL.KEYPOINT_ON or
+                                                  self.cfg.MODEL.RELATION_ON)
 
     def forward(self, images: ImageList, features: FeatureMaps):
         """
@@ -176,27 +185,17 @@ class RetinaNetModule(RPN[tuple[list[ImageAnchors], list[ClassWiseObjectness], F
 
         anchors, class_logits, box_regression = args
 
-        # Only do box selection (NMS) during training if not a one stage method, otherwise just return anchors
+        # Only do box selection (NMS) during:
+        # - testing
+        # - if not a one stage method
+        # Otherwise just return anchors
         if not self.training or \
                 self.cfg.MODEL.RETINANET.TWO_STAGE or \
-                self.cfg.MODEL.ROI_HEADS_ONLY or \
-                self.cfg.MODEL.RELATION_ON:
+                self.training_requires_full_processing:
             with torch.no_grad():
                 boxes = self.box_selector(anchors, class_logits, box_regression, targets)
         else:
             boxes = [BoxListOps.cat(ancs_per_image_per_lvl) for ancs_per_image_per_lvl in anchors]
-
-        if not self.cfg.MODEL.RELATION_ON:
-            # Normal box prediction pipeline
-            return boxes
-
-        # Relation prediction stuff:
-        # During training, we however need to match predictions to groundtruth and
-        # add the LABELS (and ATTRIBUTES) fields to the prediction
-        if targets is not None:
-            # This is needed during validation loss computation of relations
-            # We need to assign GT labels, using an IoUMatcher with the relation head threshold
-            self._assign_label_to_proposals(boxes, targets)
 
         return boxes
 
@@ -205,40 +204,8 @@ class RetinaNetModule(RPN[tuple[list[ImageAnchors], list[ClassWiseObjectness], F
         loss_box_cls, loss_box_reg = self.loss_evaluator(anchors, class_logits, box_regression, targets)
         return {"loss_objectness": loss_box_cls, "loss_rpn_box_reg": loss_box_reg}
 
-    def _assign_label_to_proposals(self, proposals: list[BoxList], targets: list[BoxList]):
-        """
-        Add the LABELS (and ATTRIBUTES) fields of the proposals after matching with groundtruth.
-        I.e. converts RPNProposals to BoxHeadTargets.
-        A 0 in these fields' tensors means that there was no match.
-        Note: only used for relation prediction.
-        """
-        if len(proposals) == 0:
-            return proposals
+    def assign_label_to_proposals(self, proposals: list[BoxList], targets: list[BoxList]):
+        return assign_label_to_proposals(proposals, targets, self.cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD)
 
-        fields_to_copy = [BoxList.AnnotationField.LABELS]
-        if self.cfg.MODEL.ATTRIBUTE_ON:
-            fields_to_copy.append(BoxList.AnnotationField.ATTRIBUTES)
-
-        # For each image in the batch, match proposals to groundtruth and add LABELS field
-        # Note: we're doing part of the sampling for relation detection
-        #       I.e. we rely on the detector to find out the groundtruth label of the detection,
-        #       But we need to keep in mind that the classification may not be final yet
-        for img_idx, (target, proposal) in enumerate(zip(targets, proposals)):
-            if len(proposal) == 0:
-                # Still need to add empty attributes
-                proposal.LABELS = torch.zeros(0, device=proposal.boxes.device, dtype=torch.int64)
-                if self.cfg.MODEL.ATTRIBUTE_ON:
-                    proposal.ATTRIBUTES = torch.zeros(
-                        (0, target.ATTRIBUTES.shape[1]),
-                        device=proposal.boxes.device, dtype=torch.int64
-                    )
-                continue
-
-            matched_indexes = self.rel_object_matcher(target, proposal)
-            proposal.LABELS = target.LABELS.long()[matched_indexes.clamp(min=0)]
-            proposal.LABELS[matched_indexes < 0] = 0
-
-            # Attributes
-            if self.cfg.MODEL.ATTRIBUTE_ON:
-                proposal.ATTRIBUTES = target.ATTRIBUTES.long()[matched_indexes.clamp(min=0)]
-                proposal.ATTRIBUTES[matched_indexes < 0] = 0
+    def is_one_stage_detector(self) -> bool:
+        return not self.is_binary_classification

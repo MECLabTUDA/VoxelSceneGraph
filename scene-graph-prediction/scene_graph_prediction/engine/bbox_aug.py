@@ -6,6 +6,8 @@ from scene_graph_prediction.modeling.abstractions.box_head import BoxHeadTestPro
 from scene_graph_prediction.modeling.abstractions.detector import AbstractDetector
 from scene_graph_prediction.modeling.abstractions.loss import LossDict
 from scene_graph_prediction.modeling.roi_heads.box_head.default.inference import build_roi_box_postprocessor
+from scene_graph_prediction.modeling.utils import BoxCoder
+from scene_graph_prediction.modeling.utils.misc import LossComputationCfg
 from scene_graph_prediction.structures import ImageList, BoxList, BoxListOps
 
 _SIZE_T = int | tuple[int, ...]
@@ -14,7 +16,7 @@ _SIZE_T = int | tuple[int, ...]
 def im_detect_bbox_aug(
         model: AbstractDetector,
         images: ImageList,
-        compute_loss: bool,
+        compute_loss: LossComputationCfg,
         device: torch.device,
         targets: list[BoxList] | None
 ) -> tuple[list[BoxHeadTestProposal], LossDict]:
@@ -28,7 +30,7 @@ def im_detect_bbox_aug(
     boxlists_ts: list[list[BoxList]] = [[] for _ in range(len(images))]
     # Compute detections for the original image (identity transform)
     # Note: we only compute losses for this case
-    boxlists_i, losses = model(images.to(device), targets, compute_loss)
+    boxlists_i, losses = model(images.to(device), targets, compute_loss=compute_loss)
     for idx, boxlist_t in enumerate(boxlists_i):
         # The first one (func call) is identity transform, no need to resize the boxlist
         boxlists_ts[idx].append(boxlist_t)
@@ -58,7 +60,8 @@ def im_detect_bbox_aug(
     boxlists = [BoxListOps.cat(boxlist_ts) for boxlist_ts in boxlists_ts]
 
     # Apply NMS and limit the final detections
-    post_processor = build_roi_box_postprocessor(cfg)
+    box_coder = BoxCoder(weights=cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS, n_dim=cfg.INPUT.N_DIM)
+    post_processor = build_roi_box_postprocessor(cfg, box_coder)
     return [post_processor.filter_results(boxlist, cfg.INPUT.N_OBJ_CLASSES)[0] for boxlist in boxlists], losses
 
 

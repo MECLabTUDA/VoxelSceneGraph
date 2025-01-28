@@ -62,7 +62,7 @@ def get_extensions():
 setup(
     name="scene-graph-prediction",
     description="Library for Voxel Scene Graph experiments",
-    url="",
+    url="https://github.com/MECLabTUDA/VoxelSceneGraph",
     license="Apache2.0",
     packages=["scene_graph_prediction"],
     package_dir={"scene_graph_prediction": "scene_graph_prediction"},

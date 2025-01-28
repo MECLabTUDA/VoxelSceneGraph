@@ -23,6 +23,7 @@ from scene_graph_prediction.data.evaluation import EvaluationType
 from scene_graph_prediction.engine.training_script_blobs import build_training_basics, run_train, run_test, \
     prepare_basics
 from scene_graph_prediction.modeling.abstractions import AbstractDetector
+from scene_graph_prediction.modeling.utils.misc import LossComputationCfg
 from scene_graph_prediction.utils.checkpoint import DetectronCheckpointer
 from scene_graph_prediction.utils.miscellaneous import save_config
 
@@ -98,6 +99,7 @@ def main():
         checkpointer,
         device,
         EvaluationType.SGG,
+        LossComputationCfg(False, False, True),
         args.distributed,
         logger
     )

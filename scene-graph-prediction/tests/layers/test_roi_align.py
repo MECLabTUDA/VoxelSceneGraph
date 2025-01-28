@@ -52,7 +52,8 @@ class TestROIAlign(unittest.TestCase):
         # Crop test
         rois = torch.tensor([[0, 2, 4, 6, 5, 7, 9]], dtype=torch.float32).cuda()
         aligned = roi_align_forward_3d(features, rois, 1, 1, 4, 4, 4, 0)
-        expected_depth = torch.arange(2, 6).repeat(16).view(4, 4, 4).T.float().cuda()
+
+        expected_depth = torch.arange(2, 6).repeat(16).view(4, 4, 4).permute(2, 1, 0).float().cuda()
         expected_vertical = torch.arange(4, 8).repeat(4).view(4, 4).T.repeat(4, 1).view(4, 4, 4).float().cuda()
         expected_horizontal = torch.arange(6, 10).repeat(16).view(4, 4, 4).float().cuda()
         torch.testing.assert_close(aligned[0, 0], expected_depth)

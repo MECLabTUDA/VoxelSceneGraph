@@ -38,3 +38,5 @@ datasets/
 export_for_build.sh
 /fedsc/
 /paper_utility_scripts/
+
+*.egg-info

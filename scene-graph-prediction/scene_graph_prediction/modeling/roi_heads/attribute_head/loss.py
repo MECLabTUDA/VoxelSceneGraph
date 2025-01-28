@@ -85,6 +85,7 @@ class AttributeHeadLossComputation(torch.nn.Module):
 
     def _attribute_loss(self, logits: AttributeLogits, labels: torch.LongTensor) -> torch.Tensor:
         if self.use_binary_loss:
+            # FIXME .cuda() is banned because we need to set the exact device
             pos_weight = torch.FloatTensor([self.pos_weight] * self.num_attribute_cat).cuda()
             all_loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, labels, pos_weight=pos_weight)
             return all_loss

@@ -169,10 +169,7 @@ class AnchorGenerator(_AbstractAnchorGenerator):
                 boxlist = BoxList(anchors_per_feature_map, size, mode=BoxList.Mode.zyxzyx)
                 self._add_visibility_to(boxlist)
                 # Add anchor level field
-                boxlist.add_field(
-                    BoxList.PredictionField.ANCHOR_LVL,
-                    torch.full((len(boxlist),), lvl, dtype=torch.long, device=boxlist.boxes.device)
-                )
+                boxlist.ANCHOR_LVL = torch.full((len(boxlist),), lvl, dtype=torch.long, device=boxlist.boxes.device)
                 anchors_in_image.append(boxlist)
             anchors.append(anchors_in_image)
         return anchors
@@ -219,7 +216,7 @@ class AnchorGenerator(_AbstractAnchorGenerator):
             ))
         else:
             indexes_inside = torch.ones(anchors.shape[0], dtype=torch.uint8, device=anchors.device)
-        boxlist.add_field(BoxList.PredictionField.VISIBILITY, indexes_inside)
+        boxlist.VISIBILITY = indexes_inside
 
 
 def build_anchor_generator(cfg: CfgNode, anchor_strides: AnchorStrides) -> AnchorGenerator:

@@ -67,7 +67,7 @@ RPNRawPredictions = TypeVar("RPNRawPredictions", bound=tuple)
 
 class RPN(torch.nn.Module, ABC, Generic[RPNRawPredictions]):
     """
-    Interface for the RPN module.
+    Interface for the RPN module. One-stage detectors can also be implemented using this interface.
     Uses RPNProposals i.e. BoxLists with an "objectness" field.
 
     Note: usually contains an AnchorGenerator, a RPNHead and an RPN post-processor.
@@ -80,7 +80,7 @@ class RPN(torch.nn.Module, ABC, Generic[RPNRawPredictions]):
             self,
             images: ImageList,
             features: FeatureMaps
-    ) -> RPNRawPredictions:
+    ) -> RPNRawPredictions:  # FIXME could also be a BoxHeadTargets if we have a one-stage detector
         """
         :param images: Images for which we want to compute the predictions.
         :param features: Features computed from the images that are used for computing the predictions.
@@ -100,7 +100,8 @@ class RPN(torch.nn.Module, ABC, Generic[RPNRawPredictions]):
             targets: list[BoxList] | None = None
     ) -> RPNProposals:
         """
-        If cfg.MODEL.RELATION_ON, this method should also do
+        If cfg.MODEL.RELATION_ON, this method should also assign LABELS (and ATTRIBUTES) for relation prediction,
+        if this is a one-stage detector.
         :param args: see self.forward().
         :param targets: Ground truth boxes present in the image (optional). Used to add GT objects during training.
         :returns: The predicted boxes from the RPN, one BoxList per image.
@@ -119,6 +120,22 @@ class RPN(torch.nn.Module, ABC, Generic[RPNRawPredictions]):
         :returns: The losses for the model.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def is_one_stage_detector(self) -> bool:
+        """
+        Whether this RPN is acting as a one-stage detector.
+        E.g. a RetinaNet detector can be either.
+        """
+        raise NotImplementedError
+
+    # noinspection PyUnusedLocal
+    def assign_label_to_proposals(self, proposals: RPNProposals, targets: list[BoxList]):
+        """One-stage detectors have to be able to mirror the functionalities of a BoxHead. See doc there."""
+        if not self.is_one_stage_detector():
+            raise RuntimeError("An RPN cannot assign labels to proposals.")
+        else:
+            raise NotImplementedError
 
 
 # RetinaNet

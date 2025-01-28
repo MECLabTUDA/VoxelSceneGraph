@@ -18,6 +18,7 @@ from scene_graph_prediction.data.evaluation import evaluate, IouType, Evaluation
 from scene_graph_prediction.engine import inference
 from scene_graph_prediction.modeling.abstractions.detector import AbstractDetector
 from scene_graph_prediction.modeling.abstractions.loss import LossDict
+from scene_graph_prediction.modeling.utils.misc import LossComputationCfg
 from scene_graph_prediction.scheduling import build_lr_scheduler, build_optimizer
 from scene_graph_prediction.scheduling.lr_scheduler import MetricsAwareScheduler
 from scene_graph_prediction.utils.checkpoint import DetectronCheckpointer
@@ -39,11 +40,17 @@ def parse_args(parse_evaluation_types: bool = False) -> argparse.Namespace:
         help="path to config file",
         type=str,
     )
-    parser.add_argument("--local_rank", type=int, default=0)
+    parser.add_argument("--local-rank", type=int, default=0)
     parser.add_argument(
         "--skip-test",
         dest="skip_test",
         help="Do not test the final model",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--allow-deprecated-options",
+        dest="allow_deprecated",
+        help="Allow unknown options when loading a (old) config. Use with care...",
         action="store_true",
     )
     parser.add_argument(
@@ -55,7 +62,7 @@ def parse_args(parse_evaluation_types: bool = False) -> argparse.Namespace:
 
     if parse_evaluation_types:
         parser.add_argument(
-            "-c"
+            "-o"
             "--coco-eval",
             dest="coco_eval_type",
             help="Evaluate COCO-style detection.",
@@ -101,6 +108,10 @@ def build_config(args: argparse.Namespace):
         override_path_idx = args.opts.index("BASE_CFG") + 1
         if override_path_idx < len(args.opts):
             root_cfg_path = args.opts[override_path_idx]
+
+    # Allow deprecated options
+    if args.allow_deprecated:
+        cfg.set_new_allowed(True)
 
     # Recursive load changes from defaults
     recursive_merge(root_cfg_path, ["", os.path.abspath(args.config_file)])
@@ -210,6 +221,7 @@ def run_train(
         checkpointer: DetectronCheckpointer,
         device: torch.device,
         evaluation_type: EvaluationType,
+        compute_loss: LossComputationCfg,
         distributed: bool,
         logger: logging.Logger
 ) -> AbstractDetector:
@@ -223,6 +235,7 @@ def run_train(
     :param device:
     :param arguments:
     :param evaluation_type: What kind of evaluation should be performed. Training script dependent.
+    :param compute_loss: how the model should be trained, i.e. which parts should produce a loss.
     :param distributed:
     :param logger:
     :returns: the trained model
@@ -242,7 +255,7 @@ def run_train(
 
     if cfg.TEST.DO_PRETRAIN_VAL:
         logger.info("Validate before training")
-        run_val(model, val_data_loaders, evaluation_type, False, distributed, logger)
+        run_val(model, val_data_loaders, evaluation_type, LossComputationCfg.none(), distributed, logger)
         # Check whether we should abort again
         if start_iter >= max_iter:
             return model
@@ -252,7 +265,8 @@ def run_train(
     start_training_time = time.time()
     end = time.time()
 
-    update_bar = tqdm(total=(cfg.TEST.VAL_PERIOD if cfg.TEST.DO_VAL else max_iter) - start_iter)
+    # Add a safeguard for if somehow cfg.TEST.VAL_PERIOD > cfg.SOLVER.MAX_ITER
+    update_bar = tqdm(total=(min(cfg.TEST.VAL_PERIOD, max_iter) if cfg.TEST.DO_VAL else max_iter) - start_iter)
     for iteration, (images, targets, ids) in enumerate(train_data_loader, start_iter):
         model.train()
         iteration += 1
@@ -277,7 +291,7 @@ def run_train(
             targets = [target.to(device) for target in targets]
 
         try:
-            _, loss_dict = model(images, targets)
+            _, loss_dict = model(images, targets, compute_loss=compute_loss)
 
             # Filter out any information that might have been returned (see doc for LossDict)
             # noinspection PyTypeChecker
@@ -334,7 +348,12 @@ def run_train(
             if cfg.TEST.DO_VAL and iteration % cfg.TEST.VAL_PERIOD == 0:
                 update_bar.close()  # Close the update bar before starting validation as it will open a new one
                 _, val_losses = run_val(
-                    model, val_data_loaders, evaluation_type, cfg.TEST.TRACK_VAL_LOSS, distributed, logger
+                    model,
+                    val_data_loaders,
+                    evaluation_type,
+                    compute_loss if cfg.TEST.TRACK_VAL_LOSS else LossComputationCfg.none(),
+                    distributed,
+                    logger
                 )
                 # If enabled, will compute the loss on the validation data
                 if cfg.TEST.TRACK_VAL_LOSS:
@@ -367,6 +386,11 @@ def run_train(
             # checkpointer.save(f"model_{iteration:07d}", **arguments)
             import traceback
             logger.error("".join(traceback.format_tb(e.__traceback__)))
+
+            # Save the model if we were about to
+            if iteration % cfg.SOLVER.CHECKPOINT_PERIOD == 0:
+                checkpointer.save(f"model_{iteration:07d}", **arguments)
+
             raise e
 
         # Log some metrics
@@ -401,7 +425,7 @@ def run_val(
         model: AbstractDetector,
         val_data_loaders: list[DataLoader],
         evaluation_type: EvaluationType,
-        compute_loss: bool,
+        compute_loss: LossComputationCfg,
         distributed: bool,
         logger: logging.Logger
 ) -> tuple[dict[str, dict[IouType, dict[str, dict[str, float]]]], LossDict]:
@@ -432,7 +456,8 @@ def run_val(
                 data_loader_val,
                 dataset_name=dataset_name,
                 compute_loss=compute_loss,
-                device=cfg.MODEL.DEVICE
+                device=cfg.MODEL.DEVICE,
+                logger=logger
             )
             dataset_result = evaluate(
                 cfg=cfg,
@@ -499,6 +524,7 @@ def run_test(
                 data_loader_test,
                 dataset_name=dataset_name,
                 device=cfg.MODEL.DEVICE,
+                logger=logger
             )
             dataset_result = evaluate(
                 cfg=cfg,

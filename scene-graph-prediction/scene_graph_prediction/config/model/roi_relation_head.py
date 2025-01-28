@@ -14,8 +14,6 @@ ROI_RELATION_HEAD.IS_SLOW_PREDICTOR_HEAD = False
 
 # Model for feature extraction, usually the same as for the Box head
 ROI_RELATION_HEAD.FEATURE_EXTRACTOR = "RelationFeatureExtractor"
-# Model for feature extraction from subject+object mask pairs
-ROI_RELATION_HEAD.MASK_FEATURE_EXTRACTOR = "Factor444RelationMaskFeatureExtractor"
 # Whether to use all feature levels to do pooling (and extract object features)
 ROI_RELATION_HEAD.POOLING_ALL_LEVELS = True
 

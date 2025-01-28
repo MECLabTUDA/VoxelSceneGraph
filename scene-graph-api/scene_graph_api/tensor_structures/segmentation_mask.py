@@ -33,11 +33,11 @@ from typing import Iterator, Sequence
 
 import cv2
 import numpy as np
-import pycocotools3d.mask as mask_utils
-import pycocotools3d.mask3d as mask_utils3d
 import torch
 from typing_extensions import Self
 
+import pycocotools3d.mask as mask_utils
+import pycocotools3d.mask3d as mask_utils3d
 from ..utils.indexing import FlipDim
 from ..utils.indexing import sanitize_cropping_box
 
@@ -100,6 +100,10 @@ class AbstractMaskList(ABC):
 
     @abstractmethod
     def to(self, *args, **kwargs) -> Self:
+        raise NotImplementedError
+
+    @classmethod
+    def cat(cls, mask_lists: list[Self]) -> Self:
         raise NotImplementedError
 
     @abstractmethod
@@ -232,6 +236,12 @@ class BinaryMaskList(AbstractMaskList):
             align_corners=False
         )[0].type_as(self.masks)
         return BinaryMaskList(resized_masks, size)
+
+    @classmethod
+    def cat(cls, mask_lists: list[Self]) -> Self:
+        assert len(mask_lists) > 0
+        assert all(isinstance(ml, BinaryMaskList) for ml in mask_lists)
+        return cls(torch.cat([ml.masks for ml in mask_lists], dim=0), mask_lists[0].size)
 
     def to(self, *args, **kwargs) -> Self:
         return BinaryMaskList(self.masks.to(*args, **kwargs), self.size)
@@ -435,6 +445,12 @@ class PolygonList(AbstractMaskList):
     def resize(self, size: _SIZE_T) -> Self:
         assert len(size) == self.n_dim
         return PolygonList([polygon.resize(size) for polygon in self.polygons], size)
+
+    @classmethod
+    def cat(cls, mask_lists: list[Self]) -> Self:
+        assert len(mask_lists) > 0
+        assert all(isinstance(ml, PolygonList) for ml in mask_lists)
+        return cls(reduce(lambda a, b: a + b, [ml.polygons for ml in mask_lists]), mask_lists[0].size)
 
     def to(self, *args, **kwargs) -> Self:
         return PolygonList(self, self.size)

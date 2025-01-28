@@ -3,9 +3,9 @@ from collections import defaultdict
 from typing import TypedDict
 
 import numpy as np
-from scene_graph_api.utils.tensor import relation_matrix_to_triplets
 from yacs.config import CfgNode
 
+from scene_graph_api.utils.tensor import relation_matrix_to_triplets
 from scene_graph_prediction.structures import BoxList
 from .evaluators import *
 from ..utils import SGGEvaluationMode, IouType
@@ -25,6 +25,7 @@ class RelationsModeEvaluator:
     """Class used to instantiate the appropriate evaluators and wrap them for convenience."""
 
     def __init__(self, mode: SGGEvaluationMode, meta: MetaContext):
+        self.meta = meta
         # Select the appropriate metrics
         if meta.compute_upper_bound:
             self.evaluators = [SGRecallUpperBoundEvaluator(mode, meta)]
@@ -67,56 +68,76 @@ def sgg_evaluation(
         cfg: CfgNode,
         dataset: COCOEvaluableDataset | SGGEvaluableDataset,
         predictions: dict[int, BoxList],
-        output_folder: str,
         logger: logging.Logger
 ) -> dict[IouType, dict[str, dict[str, float]]]:
     # Extract evaluation settings from cfg
     mode = SGGEvaluationMode.build(cfg)
+    iou_types = IouType.build_iou_types(cfg)
+    sep_length = 140
 
     groundtruths = {image_id: dataset.get_groundtruth(image_id) for image_id in range(len(predictions))}
 
-    result_str = "\n" + "=" * 100 + "\n"
+    # For each type of matching, we compute what we need to
+    all_results = {}
+    for iou_type in [IouType.BoundingBox, IouType.Segmentation]:
+        if iou_type not in iou_types:
+            # IouType is not selected, so we skip it
+            continue
 
-    # Evaluate relations
-    meta = MetaContext(
-        mode=mode,
-        n_rel_classes=len(dataset.predicates),
-        compute_upper_bound=cfg.TEST.RELATION.COMPUTE_RELATION_UPPER_BOUND,
-        obj_class_agnostic_upper_bound=cfg.TEST.RELATION.UPPER_BOUND_ALLOW_RECLASSIFICATION,
-        iou_thr=cfg.TEST.RELATION.IOU_THRESHOLD,
-        ks=cfg.TEST.RELATION.RECALL_AT_K,
-        no_gc_top_n_pred=cfg.TEST.RELATION.NO_GRAPH_CONSTRAINT_TOP_N_RELATION
-    )
+        # Figure out which kind of result type we're computing
+        match iou_type:
+            case IouType.BoundingBox:
+                sgg_res_type = IouType.Relations
+            case IouType.Segmentation:
+                sgg_res_type = IouType.MaskRelations
+            case _:
+                raise NotImplementedError
 
-    evaluator = RelationsModeEvaluator(mode, meta)
-    result_dict: SGGResults = defaultdict(lambda: defaultdict(list))
-    for image_id in groundtruths:
-        # Note: we assume that the relation predictions are already sorted
-        _evaluate_relation_of_one_image(
-            groundtruths[image_id],
-            predictions[image_id],
-            result_dict,
-            evaluator,
-            mode,
-            meta.compute_upper_bound
+        result_str = f"\nSGG metrics using {iou_type.name} matching:\n" + "=" * sep_length + "\n"
+
+        # Evaluate relations
+        meta = MetaContext(
+            mode=mode,
+            n_rel_classes=len(dataset.predicates),
+            compute_upper_bound=cfg.TEST.RELATION.COMPUTE_RELATION_UPPER_BOUND,
+            obj_class_agnostic_upper_bound=cfg.TEST.RELATION.UPPER_BOUND_ALLOW_RECLASSIFICATION,
+            iou_thr=cfg.TEST.RELATION.IOU_THRESHOLD,
+            ks=cfg.TEST.RELATION.RECALL_AT_K,
+            no_gc_top_n_pred=cfg.TEST.RELATION.NO_GRAPH_CONSTRAINT_TOP_N_RELATION,
+            matching_type=iou_type
         )
-    # Now that all images have been evaluated, we can compute aggregates
-    # E.g. once we have the recall for each image, we want to store the mean across images
-    evaluator.aggregate(result_dict)
 
-    # Print result
-    result_str += evaluator.results_to_str(result_dict)
-    logger.info(result_str)
+        evaluator = RelationsModeEvaluator(mode, meta)
+        result_dict: SGGResults = defaultdict(lambda: defaultdict(list))
+        for image_id in groundtruths:
+            # Note: we assume that the relation predictions are already sorted
+            _evaluate_relation_of_one_image(
+                groundtruths[image_id],
+                predictions[image_id],
+                result_dict,
+                evaluator,
+                mode,
+                meta.compute_upper_bound
+            )
+        # Now that all images have been evaluated, we can compute aggregates
+        # E.g. once we have the recall for each image, we want to store the mean across images
+        evaluator.aggregate(result_dict)
 
-    return {
-        IouType.Relations: {
+        # Print result
+        result_str += evaluator.results_to_str(result_dict)
+        result_str += "=" * sep_length + "\n"
+
+        # Store computed metrics
+        all_results[sgg_res_type] = {
             "Overall": {
                 f"{metric_name}@{k}": float(np.mean(per_img_res))  # Linter going haywire without the float cast
                 for metric_name, res in result_dict.items()
                 for k, per_img_res in res.items()
             }
         }
-    }
+        logger.info(result_str)
+
+    return all_results
 
 
 def _evaluate_relation_of_one_image(
@@ -148,6 +169,14 @@ def _evaluate_relation_of_one_image(
         pred_rel_scores = prediction.PRED_REL_CLS_SCORES.detach().cpu().numpy()
         pred_rel_labels = prediction.PRED_REL_LABELS.detach().cpu().numpy()
 
+    if evaluator.meta.matching_type == IouType.Segmentation:
+        gt_masks = groundtruth.MASKS.get_mask_tensor().cpu().numpy()
+        pred_masks = prediction.PRED_MASKS.get_mask_tensor().detach().cpu().numpy()
+    else:
+        gt_masks = None
+        pred_masks = None
+
+    # FIXME this is a mess and to an extent it only serves at converting BoxList fields to numpy...
     image_context = ImageContext(
         gt_boxes=groundtruth.convert(BoxList.Mode.zyxzyx).boxes.detach().cpu().numpy(),
         gt_labels=groundtruth.LABELS.long().detach().cpu().numpy(),
@@ -157,10 +186,12 @@ def _evaluate_relation_of_one_image(
         pred_obj_scores=prediction.PRED_SCORES.detach().cpu().numpy(),
         pred_rel_idxs=pred_rel_idxs,
         pred_rel_scores=pred_rel_scores,
-        pred_rel_labels=pred_rel_labels
+        pred_rel_labels=pred_rel_labels,
+        gt_masks=gt_masks,
+        pred_masks=pred_masks
     )
 
-    # Some sanity check
+    # Some sanity checks
     if not compute_upper_bound:
         if mode == SGGEvaluationMode.PredicateClassification:
             assert image_context.gt_boxes.shape == image_context.pred_boxes.shape

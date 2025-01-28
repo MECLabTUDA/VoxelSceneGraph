@@ -61,7 +61,7 @@ class ROIRelationHead(AbstractROIRelationHead):
                   rel_labels: list of relation labels (one tensor per image)
                   rel_binaries: list of symmetric binary matrices (one tensor per image), i.e. are two objects related
         """
-        # Relation sub-sampling and assign ground truth label during training
+        # Relation subsampling and assign ground truth label during training
         with torch.no_grad():
             if self.cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
                 rel_labels, rel_pair_idxs, rel_binaries = self.samp_processor.gtbox_relation_sample(proposals, targets)

@@ -53,7 +53,7 @@ class Checkpointer:
         if not filename.endswith(".pth"):
             filename += ".pth"
 
-        save_file = (self.save_dir / filename).absolute()
+        save_file = (self.save_dir / filename).absolute().resolve()
         self.logger.info(f"Saving checkpoint to {save_file.as_posix()}")
         torch.save(data, save_file)
         self.tag_last_checkpoint(save_file)
@@ -66,7 +66,7 @@ class Checkpointer:
             load_mapping: dict | None = None
     ) -> dict:
         """
-        :param filename: is optional and is overriden if self.has_checkpoint() is True
+        :param filename: is optional and is overridden if self.has_checkpoint() is True
         :param load_mapping:
         :param update_schedule:
         :param with_optim:
@@ -74,13 +74,18 @@ class Checkpointer:
         if not load_mapping:
             load_mapping = {}
 
-        if self.has_checkpoint() and filename is None:
-            # override argument with existing checkpoint
+        if self.has_checkpoint():
+            # Override argument with existing checkpoint
             filename = self.get_checkpoint_file()
+        else:
+            # We might be loading some pretrained weights soon, so override the with_optim argument
+            with_optim = False
+
         if not filename:
             # no checkpoint could be found
             self.logger.info("No checkpoint found. Initializing model from scratch.")
             return {}
+
         self.logger.info(f"Loading checkpoint from {filename}")
         checkpoint = self._load_file(filename)
         self._load_model(checkpoint, load_mapping)
@@ -122,7 +127,7 @@ class Checkpointer:
             f.write(Path(last_filename).relative_to(self.save_dir.resolve()).as_posix())
 
     def _load_file(self, f):
-        return torch.load(f, map_location=torch.device("cpu"))
+        return torch.load(f, map_location=torch.device("cpu"), weights_only=True)
 
     def _load_model(self, checkpoint, load_mapping):
         load_state_dict(self.model, checkpoint.pop("model"), load_mapping)

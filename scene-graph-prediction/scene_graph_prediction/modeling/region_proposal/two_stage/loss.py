@@ -110,7 +110,7 @@ class RPNLossComputationBase(ABC):
 
             # Discard anchors that go out of the boundaries of the image
             if discard_occluded:
-                occluded = ~anchors_per_image.get_field(BoxList.PredictionField.VISIBILITY)
+                occluded = ~anchors_per_image.VISIBILITY
                 labels_per_image[occluded] = Sampler.IGNORE
 
             # Discard indices that are between thresholds

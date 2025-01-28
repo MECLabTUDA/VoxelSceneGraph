@@ -20,7 +20,7 @@ from setuptools import setup
 setup(
     name="scene-graph-api",
     description="API library for Voxel Scene Graph",
-    url="",
+    url="https://github.com/MECLabTUDA/VoxelSceneGraph",
     license="Apache2.0",
     packages=["scene_graph_api"],
     package_dir={"scene_graph_api": "scene_graph_api"},

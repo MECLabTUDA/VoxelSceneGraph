@@ -35,7 +35,8 @@ class Matcher(ABC):
         if len(target) == 0:
             raise ValueError("No ground-truth boxes available for one of the images during training")
         elif len(proposal) == 0:
-            raise ValueError("No proposal boxes available for one of the images during training")
+            # noinspection PyTypeChecker
+            return torch.empty(0, dtype=torch.long, device=proposal.boxes.device)
 
         return self._match(target, proposal)
 

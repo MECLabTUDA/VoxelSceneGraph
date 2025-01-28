@@ -53,32 +53,6 @@ class RelationContext(torch.nn.Module, ABC):
         raise NotImplementedError
 
 
-# ROIRelation Feature Extraction
-
-class ROIRelationMaskFeatureExtractor(torch.nn.Module, ABC):
-    """
-    Convert subject+object masks to features that can be added to the ines produced by the ROI box feature extractor.
-    I.e. the produced features need to have the same size as the Pooler output.
-    The original size of the masks is left open, but must be supplied by the get_orig_rect_size method.
-    I.e. we could use masks that are 2, 4, 8... times bigger than the Pooler output
-    """
-    n_dim: int
-
-    # noinspection PyUnusedLocal
-    def __init__(self, cfg: CfgNode, out_channels: int):
-        # in_channels will always be 2 (one mask for the subject and one for the object)
-        super().__init__()
-
-    @abstractmethod
-    def get_orig_rect_size(self) -> tuple[int, ...]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def forward(self, masks: torch.FloatTensor) -> torch.FloatTensor:
-        """Features of shape N x POOLER_RESOLUTION_DEPTH x POOLER_RESOLUTION x POOLER_RESOLUTION"""
-        raise NotImplementedError
-
-
 class ROIRelationFeatureExtractor(torch.nn.Module, ABC):
     n_dim: int
     representation_size: int

@@ -150,17 +150,19 @@ class TestKnowledgeGuidedObjectSampler(unittest.TestCase):
         }
         sampler = KnowledgeGuidedObjectSampler(
             cfg=cfg_,
-            batch_size=3,
-            iterations_per_group=2,
+            batch_size=4,
+            samples_per_group=2,
             num_batches=4,
             start_batch=0,
             strict_sampling=False,
             group_to_ids=group_to_ids
         )
 
-        for i, batch in enumerate(sampler):
-            self.assertEqual(len(batch), 3)
-            if i in [0, 1]:
-                self.assertTrue(all(i % 2 == 0 for i in batch))
-            if i in [2, 3]:
-                self.assertTrue(all(i % 2 == 1 for i in batch))
+        for batch in sampler:
+            self.assertEqual(len(batch), 4)
+            self.assertEqual(batch[0] % 2, 0)
+            self.assertEqual(batch[1] % 2, 0)
+            self.assertEqual(batch[2] % 2, 1)
+            self.assertEqual(batch[3] % 2, 1)
+            self.assertNotEqual(batch[0], batch[1])
+            self.assertNotEqual(batch[2], batch[3])

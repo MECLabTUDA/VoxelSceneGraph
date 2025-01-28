@@ -2,11 +2,13 @@ import json
 import logging
 from pathlib import Path
 
-from scene_graph_api.utils.pathing import remove_suffixes
 from yacs.config import CfgNode
 
+from scene_graph_api.utils.pathing import remove_suffixes
 from scene_graph_prediction.structures import BoxList
 from .coco_eval import coco_evaluation
+from .non_unique_stats_eval import non_unique_stats_eval
+from .per_attribute_obj_recall import per_attribute_obj_recall
 from .segmentation_eval import segmentation_eval
 from .sgg_eval import sgg_evaluation
 from .utils import IouType, SGGEvaluationMode, EvaluationType
@@ -52,10 +54,25 @@ def evaluate(
             cfg=cfg,
             dataset=dataset,
             predictions=predictions,
-            output_folder=output_folder,
             logger=logger,
         )
         metrics.update(detec_metrics)
+        metrics[IouType.BoundingBox].update(
+            non_unique_stats_eval(
+                cfg=cfg,
+                dataset=dataset,
+                predictions=predictions,
+                logger=logger,
+            )[IouType.BoundingBox]
+        )
+        metrics[IouType.BoundingBox]["Overall"].update(
+            per_attribute_obj_recall(
+                cfg=cfg,
+                dataset=dataset,
+                predictions=predictions,
+                logger=logger,
+            )[IouType.BoundingBox]["Overall"]
+        )
 
     if evaluation_type & EvaluationType.SemanticSegmentation:
         # noinspection PyTypeChecker
@@ -78,7 +95,6 @@ def evaluate(
             cfg=cfg,
             dataset=dataset,
             predictions=predictions,
-            output_folder=output_folder,
             logger=logger,
         )
         metrics.update(sgg_metrics)

@@ -219,7 +219,7 @@ def _load_word_vectors(root: str, wv_type: str, dim: int) -> tuple[dict[str, int
         f_name_pt = f_name + '.pt'
         _logger.debug('Loading word vectors from', f_name_pt)
         try:
-            return torch.load(f_name_pt, map_location=torch.device("cpu"))
+            return torch.load(f_name_pt, map_location=torch.device("cpu"), weights_only=True)
         except Exception as e:
             _logger.error(f"Error loading the word vectors from {f_name_pt}:\n{e}")
             sys.exit(-1)

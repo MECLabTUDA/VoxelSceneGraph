@@ -40,7 +40,7 @@ ext_modules = [
 setup(
     name="pycocotools3D",
     description="Official APIs for the MS-COCO dataset adapted to 3D",
-    url="",
+    url="https://github.com/MECLabTUDA/VoxelSceneGraph",
     license="FreeBSD",
     packages=["pycocotools3d"],
     package_dir={"pycocotools3d": "pycocotools3d"},

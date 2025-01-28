@@ -88,6 +88,7 @@ class RetinaNetLossComputation(RPNLossComputationBase):
 
             weights = cat_weights[pos_indexes]
             loss_vector = self.regression_loss(cat_box_regression, cat_targets)
+            # Note: the issue is that we have 2 * n_dim terms, and that's why the denominator is funky
             box_loss = torch.sum(loss_vector * weights) / (torch.mean(weights) * loss_vector.numel())
         else:
             box_loss = torch.tensor(0., device=pos_indexes.device, requires_grad=True)
@@ -109,7 +110,7 @@ class RetinaNetLossComputation(RPNLossComputationBase):
                     cat_box_cls[all_masks],
                     one_hot,
                     reduction="none"
-                ) * cat_weights[all_masks, None]) / (torch.mean(cat_weights[all_masks]) * selected_labels.numel())
+                ) * cat_weights[all_masks, None]) / torch.sum(cat_weights[all_masks])
         else:
             cls_loss = torch.tensor(0., device=sampled_pos_masks.device, requires_grad=True)
 

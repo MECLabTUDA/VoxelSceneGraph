@@ -4,7 +4,7 @@ import numpy as np
 
 from scene_graph_prediction.utils.miscellaneous import intersect_2d, bboxes_iou_from_np
 from .abstractions import MetaContext, ImageContext, SGGResults
-from ...utils import SGGEvaluationMode
+from ...utils import SGGEvaluationMode, IouType
 
 
 class BaseEvaluator(ABC):
@@ -23,7 +23,7 @@ class BaseEvaluator(ABC):
     @property
     @abstractmethod
     def short_metric_name(self) -> str:
-        """Short name (up to 6 characters) of the metric that is being evaluated."""
+        """Short name (up to 5 characters) of the metric that is being evaluated."""
         raise NotImplementedError
 
     @abstractmethod
@@ -56,7 +56,8 @@ class BaseEvaluator(ABC):
         # Also a safeguard for when metrics use their own set of K (PairAcc for instance)
         ks = results[self.metric_name].keys() if results[self.metric_name].keys() else self._meta.ks
         for k in ks:
-            result_str += f" {self.short_metric_name:6s} @ {k:3d}: {results[self.metric_name].get(k, 0):.3f}; "
+            padded_name = str.rjust(self.short_metric_name, 5)
+            result_str += f" {padded_name} @ {k:3d}: {results[self.metric_name].get(k, 0):.3f}; "
         result_str += f"for mode={self._mode.value}, type={self.metric_name}.\n"
         return result_str
 
@@ -105,8 +106,8 @@ class BaseEvaluator(ABC):
         Given a set of predicted triplets, returns the list of matching GT for each of the given predictions.
         :param gt_rel_repr: (#gt_rel, N) : any representation of gt relations e.g. (sub_label, pred_label, ob_label)
         :param pred_rel_repr: (#pred_rel, N) any representation of pred relations (must match gt rels)
-        :param gt_boxes: (#gt_rel, 2 * 2 * n_dim) : (sub_label, pred_label, ob_label)
-        :param pred_boxes: (#pred_rel, 2 * 2 * n_dim) array of boxes for the parts
+        :param gt_boxes: (#gt_box, 2 * 2 * n_dim) : (sub_label, pred_label, ob_label)
+        :param pred_boxes: (#pred_box, 2 * 2 * n_dim) array of boxes for the parts
         :returns: a list for each predicted triplet containing the index of all matched gt triplets.
         """
         is_phrdet = self._mode == SGGEvaluationMode.PhraseDetection
@@ -129,16 +130,25 @@ class BaseEvaluator(ABC):
                 gt_box_union = np.concatenate((gt_box_union.min(0)[:n_dim], gt_box_union.max(0)[n_dim:]), 0)
 
                 pred_boxes_union = boxes.reshape((-1, 2, 2 * n_dim))
-                pred_boxes_union = np.concatenate((pred_boxes_union.min(1)[:, :n_dim],
-                                                   pred_boxes_union.max(1)[:, n_dim:]), 1)
+                pred_boxes_union = np.concatenate(
+                    [pred_boxes_union.min(1)[:, :n_dim], pred_boxes_union.max(1)[:, n_dim:]], 1
+                )
 
-                overlap_mask = bboxes_iou_from_np(gt_box_union[None], pred_boxes_union)[0] >= .5
+                if self._meta.matching_type == IouType.BoundingBox:
+                    overlap_mask = bboxes_iou_from_np(gt_box_union[None], pred_boxes_union)[0] >= .5
+                else:
+                    # TODO match using masks
+                    overlap_mask = bboxes_iou_from_np(gt_box_union[None], pred_boxes_union)[0] >= .5
             else:
                 # Individual box IoU thresholding
                 sub_iou = bboxes_iou_from_np(gt_box[None, :2 * n_dim], boxes[:, :2 * n_dim])[0]
                 obj_iou = bboxes_iou_from_np(gt_box[None, 2 * n_dim:], boxes[:, 2 * n_dim:])[0]
 
-                overlap_mask = (sub_iou >= iou_threshold) & (obj_iou >= iou_threshold)
+                if self._meta.matching_type == IouType.BoundingBox:
+                    overlap_mask = (sub_iou >= iou_threshold) & (obj_iou >= iou_threshold)
+                else:
+                    # TODO match using masks
+                    overlap_mask = (sub_iou >= iou_threshold) & (obj_iou >= iou_threshold)
 
             # For each predicted triplet that matched with this gt triplet, mark the gt triplet as a match
             for i in np.where(keep_indexes)[0][overlap_mask]:

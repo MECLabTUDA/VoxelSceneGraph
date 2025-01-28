@@ -230,7 +230,7 @@ class COCOeval:
         self.logger.debug("Running per image evaluation...")
         params = self.params
 
-        self.logger.info(f"Evaluate annotation type *{params.iouType}*")
+        self.logger.info(f"Evaluate annotation type *{params.iouType.name}*")
         params.imgIds = list(np.unique(params.imgIds))
         if params.useCats:
             params.catIds = list(np.unique(params.catIds))

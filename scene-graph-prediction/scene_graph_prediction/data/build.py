@@ -179,6 +179,7 @@ def _build_data_loader(
             num_workers=cfg.DATALOADER.NUM_WORKERS,
             batch_sampler=batch_sampler,
             collate_fn=collator,
+            pin_memory=True
         )
 
 
@@ -282,7 +283,7 @@ def _build_batch_data_sampler(
         return KnowledgeGuidedObjectSampler(
             cfg,
             images_per_batch,
-            cfg.DATALOADER.ITER_PER_GROUP,
+            cfg.DATALOADER.SAMPLES_PER_GROUP,
             num_iters,
             start_iter,
             cfg.DATALOADER.STRICT_SAMPLING
@@ -290,7 +291,7 @@ def _build_batch_data_sampler(
     return KnowledgeGuidedRelationSampler(
         cfg,
         images_per_batch,
-        cfg.DATALOADER.ITER_PER_GROUP,
+        cfg.DATALOADER.SAMPLES_PER_GROUP,
         num_iters,
         start_iter,
         cfg.DATALOADER.STRICT_SAMPLING

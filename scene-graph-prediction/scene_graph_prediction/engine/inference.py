@@ -14,6 +14,7 @@ from scene_graph_prediction.structures import BoxList, ImageList
 from scene_graph_prediction.utils.logger import setup_logger
 from .bbox_aug import im_detect_bbox_aug
 from ..modeling.abstractions.loss import LossDict
+from ..modeling.utils.misc import LossComputationCfg
 from ..utils.comm import all_gather, is_main_process, get_world_size, synchronize, reduce_dict
 from ..utils.timer import Timer
 
@@ -23,7 +24,7 @@ def inference(
         model: AbstractDetector,
         data_loader: DataLoader,
         dataset_name: str,
-        compute_loss: bool = False,
+        compute_loss: LossComputationCfg = LossComputationCfg.none(),
         device: torch.device = "cuda",
         logger: logging.Logger | None = None
 ) -> tuple[dict[int, BoxList], LossDict] | None:
@@ -36,7 +37,7 @@ def inference(
 
     dataset: Dataset = data_loader.dataset
     # noinspection PyTypeChecker
-    logger.info(f"Start evaluation on {dataset_name} dataset({len(dataset)} images).\n")
+    logger.info(f"\nStart evaluation on {dataset_name} dataset({len(dataset)} images).")
     total_timer = Timer()
     inference_timer = Timer()
     total_timer.tic()
@@ -70,7 +71,7 @@ def _compute_on_dataset(
         cfg: CfgNode,
         model: AbstractDetector,
         data_loader: DataLoader,
-        compute_loss: bool,
+        compute_loss: LossComputationCfg,
         device: torch.device,
         synchronize_gather: bool = True,
         timer: Timer | None = None
@@ -96,7 +97,7 @@ def _compute_on_dataset(
             else:
                 # Note: this branch can both handle object detection and relation prediction
                 #       only the latter requires targets
-                output, loss_dict = model(images.to(device), targets, compute_loss)
+                output, loss_dict = model(images.to(device), targets, compute_loss=compute_loss)
 
             if timer:
                 timer.toc()

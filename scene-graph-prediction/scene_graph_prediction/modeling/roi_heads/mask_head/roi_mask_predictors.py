@@ -5,23 +5,28 @@ from scene_graph_prediction.modeling.abstractions.mask_head import MaskHeadFeatu
 from scene_graph_prediction.modeling.registries import *
 
 
-@ROI_MASK_PREDICTOR.register("MaskRCNNC4Predictor")
-class MaskRCNNC4Predictor(ROIMaskPredictor):
-    """Note: Support 2D and 3D."""
+@ROI_MASK_PREDICTOR.register("MaskRCNNC2Predictor")
+class MaskRCNNC2Predictor(ROIMaskPredictor):
+    """
+    ConvTranspose layer to increase the resolution by a factor 2 along the width and height.
+    The depth remains unchanged.
+    Note: Support 2D and 3D.
+    """
 
-    def __init__(self, cfg: CfgNode, in_channels: int):
-        super().__init__(cfg, in_channels)
+    def __init__(self, cfg: CfgNode, input_size: tuple[int, ...]):
+        super().__init__(cfg, input_size)
         self.n_dim = cfg.INPUT.N_DIM
         assert self.n_dim in [2, 3]
-        num_classes = cfg.INPUT.N_OBJ_CLASSES
+        self.input_size = input_size
+        self.num_classes = cfg.INPUT.N_OBJ_CLASSES
         dim_reduced = cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS[-1]
 
         if self.n_dim == 2:
-            self.conv5_mask = torch.nn.ConvTranspose2d(in_channels, dim_reduced, 2, 2, 0)
-            self.mask_fcn_logits = torch.nn.Conv2d(dim_reduced, num_classes, 1, 1, 0)
+            self.conv5_mask = torch.nn.ConvTranspose2d(input_size[0], dim_reduced, 2, 2, 0)
+            self.mask_fcn_logits = torch.nn.Conv2d(dim_reduced, self.num_classes, 1, 1, 0)
         else:
-            self.conv5_mask = torch.nn.ConvTranspose3d(in_channels, dim_reduced, 2, 2, 0)
-            self.mask_fcn_logits = torch.nn.Conv3d(dim_reduced, num_classes, 1, 1, 0)
+            self.conv5_mask = torch.nn.ConvTranspose3d(input_size[0], dim_reduced, (1, 2, 2), (1, 2, 2), 0)
+            self.mask_fcn_logits = torch.nn.Conv3d(dim_reduced, self.num_classes, 1, 1, 0)
 
         for name, param in self.named_parameters():
             if "bias" in name:
@@ -34,22 +39,28 @@ class MaskRCNNC4Predictor(ROIMaskPredictor):
         x = torch.nn.functional.relu(self.conv5_mask(x))
         return self.mask_fcn_logits(x)
 
+    def output_size(self) -> tuple[int, ...]:
+        if self.n_dim == 2:
+            return (self.num_classes,) + tuple(size * 2 for size in self.input_size[1:])
+        return (self.num_classes, self.input_size[1]) + tuple(size * 2 for size in self.input_size[2:])
+
 
 @ROI_MASK_PREDICTOR.register("MaskRCNNConv1x1Predictor")
 class MaskRCNNConv1x1Predictor(ROIMaskPredictor):
     """Note: Support 2D and 3D."""
 
-    def __init__(self, cfg: CfgNode, in_channels: int):
-        super().__init__(cfg, in_channels)
+    def __init__(self, cfg: CfgNode, input_size: tuple[int, ...]):
+        super().__init__(cfg, input_size)
         self.n_dim = cfg.INPUT.N_DIM
         assert self.n_dim in [2, 3]
-        num_classes = cfg.INPUT.N_OBJ_CLASSES
-        num_inputs = in_channels
+        self.input_size = input_size
+        self.num_classes = cfg.INPUT.N_OBJ_CLASSES
+        num_inputs = input_size[0]
 
         if self.n_dim == 2:
-            self.mask_fcn_logits = torch.nn.Conv2d(num_inputs, num_classes, 1, 1, 0)
+            self.mask_fcn_logits = torch.nn.Conv2d(num_inputs, self.num_classes, 1, 1, 0)
         else:
-            self.mask_fcn_logits = torch.nn.Conv3d(num_inputs, num_classes, 1, 1, 0)
+            self.mask_fcn_logits = torch.nn.Conv3d(num_inputs, self.num_classes, 1, 1, 0)
 
         for name, param in self.named_parameters():
             if "bias" in name:
@@ -61,7 +72,10 @@ class MaskRCNNConv1x1Predictor(ROIMaskPredictor):
     def forward(self, x: MaskHeadFeatures) -> MaskLogits:
         return self.mask_fcn_logits(x)
 
+    def output_size(self) -> tuple[int, ...]:
+        return (self.num_classes,) + self.input_size[1:]
 
-def build_roi_mask_predictor(cfg: CfgNode, in_channels: int) -> ROIMaskPredictor:
+
+def build_roi_mask_predictor(cfg: CfgNode, input_size: tuple[int, ...]) -> ROIMaskPredictor:
     predictor = ROI_MASK_PREDICTOR[cfg.MODEL.ROI_MASK_HEAD.PREDICTOR]
-    return predictor(cfg, in_channels)
+    return predictor(cfg, input_size)

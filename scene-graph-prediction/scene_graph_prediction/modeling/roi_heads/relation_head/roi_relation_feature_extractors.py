@@ -7,7 +7,7 @@ from yacs.config import CfgNode
 from scene_graph_prediction.layers import ROIAlign, ROIAlign3D
 from scene_graph_prediction.structures import BoxList, BoxListOps
 from scene_graph_prediction.utils.miscellaneous import get_pred_masks, get_gt_masks
-from .roi_relation_mask_feature_extractors import build_relation_mask_feature_extractor
+from ..box_head.roi_mask_feature_extractors import build_mask_feature_extractor
 from ..box_head.roi_box_feature_extractors import build_feature_extractor
 from ...abstractions.backbone import AnchorStrides, FeatureMaps
 from ...abstractions.relation_head import ROIRelationFeatureExtractor, RelationHeadFeatures
@@ -53,20 +53,20 @@ class RelationFeatureExtractor(ROIRelationFeatureExtractor):
         # Union rectangle size
         # Note: we also want to exploit finer details in the masks, so we use a size 4 times greater than the pooler's,
         #        and reduce it through the convolutions / pooling
-        self.rect_conv = build_relation_mask_feature_extractor(cfg, in_channels)
+        self.rect_conv = build_mask_feature_extractor(cfg, in_channels=2, out_channels=in_channels)
         assert self.n_dim == self.rect_conv.n_dim
 
         if self.cfg.MODEL.ROI_RELATION_HEAD.PREDICT_USE_MASKS:
             # Used to interpolate binary masks of objects to the correct shape for feature extraction
             if self.n_dim == 2:
                 self.mask_align = ROIAlign(
-                    self.rect_conv.get_orig_rect_size(),
+                    self.rect_conv.input_size(),
                     spatial_scale=1.,
                     sampling_ratio=0
                 )
             else:
                 self.mask_align = ROIAlign3D(
-                    self.rect_conv.get_orig_rect_size(),
+                    self.rect_conv.input_size(),
                     spatial_scale=1.,
                     spatial_scale_depth=1.,
                     sampling_ratio=0
@@ -93,6 +93,12 @@ class RelationFeatureExtractor(ROIRelationFeatureExtractor):
         union_proposals = []
         rect_inputs = []
         for proposal, rel_pair_idx in zip(proposals, rel_pair_idxs):
+            if rel_pair_idx.numel() == 0:
+                # Empty BoxList
+                union_proposals.append(proposal[rel_pair_idx[:, 0]])
+                rect_inputs.append(torch.zeros((0, 2, *self.rect_conv.input_size()), device=proposal.boxes.device))
+                continue
+
             # Get the box for subject and object for the relation batch
             subj_proposal: BoxList = proposal[rel_pair_idx[:, 0]]
             obj_proposal: BoxList = proposal[rel_pair_idx[:, 1]]
@@ -217,7 +223,7 @@ class RelationFeatureExtractor(ROIRelationFeatureExtractor):
         num_rel = len(subj_proposal)
         subj_proposal = subj_proposal.convert(BoxList.Mode.zyxzyx)
         obj_proposal = obj_proposal.convert(BoxList.Mode.zyxzyx)
-        rect_size = self.rect_conv.get_orig_rect_size()
+        rect_size = self.rect_conv.input_size()
 
         # Compute per-axis positional embedding
         # Note: we need this ugly indexing to expand in the right direction

@@ -31,7 +31,7 @@ def main():
     model.to(cfg.MODEL.DEVICE)
 
     checkpointer = DetectronCheckpointer(cfg, model, save_dir=cfg.OUTPUT_DIR)
-    _ = checkpointer.load(cfg.MODEL.WEIGHT)
+    checkpointer.load(cfg.MODEL.WEIGHT)
 
     run_test(model, evaluation_type, args.distributed, logger)
 

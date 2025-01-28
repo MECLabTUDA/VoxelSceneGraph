@@ -1,0 +1,7 @@
+# TODO: create if not exists and gitignore
+partition_folder: ./partitions
+model_save_folder: /home/myuser/models
+
+datasets:
+  DEFAULT: /home/myuser/
+

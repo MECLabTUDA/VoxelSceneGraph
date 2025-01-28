@@ -72,7 +72,7 @@ class PredictionField(Enum):
     #                                  (required (for sgdet only) because the obj class prediction is not final yet,
     #                                  and we might need to switch to the predicted box for the new class)
     # RPN
-    MATCHED_IDXS = "matched_idxs"  # RPN-internal
+    MATCHED_IDXS = "matched_idxs"  # Index of GT object matched with predicted object. Negative if no match.
     REGRESSION_TARGETS = "regression_targets"  # RPN-internal
     VISIBILITY = "visibility"  # Whether an anchor is enabled (can be disabled when partially outside the image); RPN-in
     OBJECTNESS = "objectness"  # Objectness score for regions predicted by the RPN (two-stage methods only)

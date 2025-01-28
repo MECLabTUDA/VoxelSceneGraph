@@ -89,6 +89,7 @@ def torch_bbox_2d(arr: torch.BoolTensor) -> torch.LongTensor:
     r_min, r_max = torch.where(rows)[0][[0, -1]]
     c_min, c_max = torch.where(cols)[0][[0, -1]]
 
+    # noinspection PyTypeChecker
     return torch.tensor([r_min, c_min, r_max, c_max]).to(dtype=torch.int64, device=arr.device)
 
 
@@ -108,10 +109,12 @@ def torch_bbox_3d(arr: torch.BoolTensor) -> torch.LongTensor:
     z_min, z_max = torch.where(z)[0][[0, -1]]
 
     # Cast np.int32 to int to avoid JSON serialization issues
+    # noinspection PyTypeChecker
     return torch.tensor([r_min, c_min, z_min, r_max, c_max, z_max]).to(dtype=torch.int64, device=arr.device)
 
 
-def segmentation_to_binary_masks(
+# FIXMe this might be a duplicate functionality now (see FieldExtractor)
+def _segmentation_to_binary_masks(
         boxes: torch.Tensor,
         labels: torch.LongTensor,
         segmentation: torch.LongTensor
@@ -138,6 +141,7 @@ def segmentation_to_binary_masks(
         # Copy binary mask over bbox area
         masks[box_idx][slicer] = segmentation[slicer] == labels[box_idx]
 
+    # noinspection PyTypeChecker
     return masks[:, None]  # Add channel dim
 
 
@@ -148,22 +152,21 @@ def get_pred_masks(prediction: BoxList) -> torch.Tensor:
     :return: binary masks for each bbox as Nx1xDxHxW.
     """
     if prediction.has_field(BoxList.PredictionField.PRED_MASKS):
-        # We just need to slice the masks so that they have the same shape as the unpadded segmentation
-        # Note: we expect Bx1xDxHxW predictions.
-        slicer = slice(None), slice(None), *tuple(slice(0, s) for s in prediction.size)
-        return prediction.PRED_MASKS[slicer]
+        # Predicted masks should always have the same size as the original (unpadded) image
+        # Note: AbstractMaskLists return tensors of shape NxDxHxW predictions.
+        return prediction.PRED_MASKS.get_mask_tensor()[:, None]  # Need to add the channel dim back
 
     # We just need to slice the segmentation so that it has the same shape as the unpadded segmentation
     slicer = tuple(slice(0, s) for s in prediction.size)
-    return segmentation_to_binary_masks(prediction.boxes, prediction.PRED_LABELS, prediction.PRED_SEGMENTATION[slicer])
+    return _segmentation_to_binary_masks(prediction.boxes, prediction.PRED_LABELS, prediction.PRED_SEGMENTATION[slicer])
 
 
 def get_gt_masks(boxes: BoxList) -> torch.Tensor:
     """
-    Given a BoxList with predictions, returns the binary masks for each bbox.
+    Given a BoxList with ground truth, returns the binary masks for each bbox.
     These may need to be computed from a predicted segmentation.
     :return: binary masks for each bbox as Nx1xDxHxW.
     """
     if boxes.has_field(BoxList.AnnotationField.MASKS):
         return boxes.MASKS
-    return segmentation_to_binary_masks(boxes.boxes, boxes.LABELS, boxes.SEGMENTATION)
+    return _segmentation_to_binary_masks(boxes.boxes, boxes.LABELS, boxes.SEGMENTATION)

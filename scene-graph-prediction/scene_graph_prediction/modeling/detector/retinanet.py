@@ -13,8 +13,6 @@ class RetinaNet(BaseDetector):
     """
 
     def __init__(self, cfg: CfgNode):
-        assert not cfg.MODEL.MASK_ON, "Masks need to be off. Consider using RetinaUNet instead."
-
         if cfg.MODEL.RELATION_ON:
             # One stage methods cannot be evaluated easily with sgcls:
             #  It would require a matching of gt boxes with anchors to get logits
@@ -22,16 +20,18 @@ class RetinaNet(BaseDetector):
             assert SGGEvaluationMode.build(cfg) != SGGEvaluationMode.SceneGraphClassification, "Mode not supported."
 
         backbone = FPN(cfg.INPUT.N_DIM, cfg.INPUT.N_CHANNELS)
+        retinanet = RetinaNetModule(cfg, backbone.out_channels, backbone.feature_strides)
         super().__init__(
             cfg,
             backbone,
-            RetinaNetModule(cfg, backbone.out_channels, backbone.feature_strides),
+            retinanet,
             build_roi_heads(
                 cfg,
                 in_channels=backbone.out_channels,
                 anchor_strides=backbone.feature_strides,
+                detector_is_one_stage=retinanet.is_one_stage_detector(),
                 is_rpn_only=cfg.MODEL.RPN_ONLY,
-                has_boxes=cfg.MODEL.RETINANET.TWO_STAGE or cfg.MODEL.ROI_HEADS_ONLY,
+                has_boxes=cfg.MODEL.BOX_ON,
                 has_masks=cfg.MODEL.MASK_ON,
                 has_keypoints=cfg.MODEL.KEYPOINT_ON,
                 has_attributes=cfg.MODEL.ATTRIBUTE_ON,

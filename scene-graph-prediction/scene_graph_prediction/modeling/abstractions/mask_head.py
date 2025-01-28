@@ -5,7 +5,6 @@ import torch
 from yacs.config import CfgNode
 
 from scene_graph_prediction.structures import BoxList
-from .backbone import AnchorStrides
 from .box_head import BoxHeadTestProposals, BoxHeadFeatures
 from .loss import MaskHeadLossDict
 from .region_proposal import FeatureMaps
@@ -18,18 +17,7 @@ MaskHeadTargets = list[BoxList]  # fields: labels,mask -> torch.Tensor,AbstractM
 # but we use a different alias to signify that we don't reuse the features produced by the ROIBoxHead
 MaskHeadFeatures = torch.Tensor
 
-
-# ROIMask Feature Extraction
-class ROIMaskFeatureExtractor(torch.nn.Module, ABC):
-    n_dim: int
-
-    # noinspection PyUnusedLocal
-    def __init__(self, cfg: CfgNode, in_channels: int, anchor_strides: AnchorStrides):
-        super().__init__()
-
-    @abstractmethod
-    def forward(self, x: list[torch.Tensor], proposals: list[BoxList]) -> MaskHeadFeatures:
-        raise NotImplementedError
+# ROIMask Feature Extractions is the same as for the box head (to a degree)
 
 
 # ROIMask Predictor
@@ -40,11 +28,20 @@ class ROIMaskPredictor(torch.nn.Module, ABC):
     n_dim: int
 
     # noinspection PyUnusedLocal
-    def __init__(self, cfg: CfgNode, in_channels: int):
+    def __init__(
+            self,
+            cfg: CfgNode,
+            input_size: tuple[int, ...]  # Cx(Dx)HxW
+    ):
         super().__init__()
 
     @abstractmethod
     def forward(self, x: MaskHeadFeatures) -> MaskLogits:
+        raise NotImplementedError
+
+    @abstractmethod
+    def output_size(self) -> tuple[int, ...]:
+        """Size of the output of the feature extractor as Cx(Dx)HxW."""
         raise NotImplementedError
 
 

@@ -2,6 +2,7 @@
 import os
 import unittest
 from collections import OrderedDict
+from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import torch
@@ -50,7 +51,10 @@ class TestCheckpointer(unittest.TestCase):
                 # in the same folder
                 fresh_checkpointer = Checkpointer(fresh_model, save_dir=f)
                 self.assertTrue(fresh_checkpointer.has_checkpoint())
-                self.assertEqual(fresh_checkpointer.get_checkpoint_file(), os.path.join(f, "checkpoint_file.pth"))
+                self.assertEqual(
+                    Path(fresh_checkpointer.get_checkpoint_file()).as_posix(),
+                    (Path(f) / "checkpoint_file.pth").as_posix()
+                )
                 _ = fresh_checkpointer.load()
 
             for trained_p, loaded_p in zip(trained_model.parameters(), fresh_model.parameters()):

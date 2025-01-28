@@ -42,7 +42,6 @@ def coco_evaluation(
         cfg: CfgNode,
         dataset: COCOEvaluableDataset,
         predictions: dict[int, BoxList],
-        output_folder: str | None,
         logger: logging.Logger
 ) -> tuple[dict[IouType, dict[str, dict[str, float]]], dict]:
     iou_types = IouType.build_iou_types(cfg)
@@ -188,7 +187,7 @@ def _prepare_for_coco_segmentation(
             lengths = image_depth, image_height, image_width
         else:
             lengths = image_height, image_width
-        masks: AbstractMaskList = get_pred_masks(prediction)
+        masks = get_pred_masks(prediction)
 
         # Masker is necessary only if masks haven't been already resized.
         assert len(lengths) == prediction.n_dim

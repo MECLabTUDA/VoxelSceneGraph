@@ -4,6 +4,7 @@
 
 #ifdef WITH_CUDA
 #include "cuda/vision.h"
+#include "cuda_runtime_api.h"
 #endif
 
 
@@ -29,6 +30,7 @@ int deform_conv_forward(
 {
   if (input.is_cuda()) {
 #ifdef WITH_CUDA
+    cudaSetDevice(input.options().device().index());
     return deform_conv_forward_cuda(
         input, weight, offset, output, columns, ones,
         kW, kH, dW, dH, padW, padH, dilationW, dilationH,
@@ -64,6 +66,7 @@ int deform_conv_backward_input(
 {
   if (input.is_cuda()) {
 #ifdef WITH_CUDA
+    cudaSetDevice(input.options().device().index());
     return deform_conv_backward_input_cuda(
         input, offset, gradOutput, gradInput, gradOffset, weight, columns,
         kW, kH, dW, dH, padW, padH, dilationW, dilationH, 
@@ -99,6 +102,7 @@ int deform_conv_backward_parameters(
 {
   if (input.is_cuda()) {
 #ifdef WITH_CUDA
+    cudaSetDevice(input.options().device().index());
     return deform_conv_backward_parameters_cuda(
         input, offset, gradOutput, gradWeight, columns, ones,
         kW, kH, dW, dH, padW, padH, dilationW, dilationH,
@@ -135,6 +139,7 @@ void modulated_deform_conv_forward(
 {
   if (input.is_cuda()) {
 #ifdef WITH_CUDA
+    cudaSetDevice(input.options().device().index());
     return modulated_deform_conv_cuda_forward(
         input, weight, bias, ones, offset, mask, output, columns,
         kernel_h, kernel_w, stride_h, stride_w, 
@@ -177,6 +182,7 @@ void modulated_deform_conv_backward(
 {
   if (input.is_cuda()) {
 #ifdef WITH_CUDA
+    cudaSetDevice(input.options().device().index());
     return modulated_deform_conv_cuda_backward(
         input, weight, bias, ones, offset, mask, columns, 
         grad_input, grad_weight, grad_bias, grad_offset, grad_mask, grad_output,

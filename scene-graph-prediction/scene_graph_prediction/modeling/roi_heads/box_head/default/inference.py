@@ -23,7 +23,7 @@ class PostProcessor(torch.nn.Module):
             score_thresh: float = 0.05,
             nms: float = 0.5,
             post_nms_per_cls_topn: int = 300,
-            nms_filter_duplicates: bool = False,
+            nms_filter_duplicates: bool = False,  # Whether to filter out boxes which get predicted as two classes
             detections_per_img: int = 100,
             cls_agnostic_bbox_reg: bool = False,
             bbox_aug_enabled: bool = False
@@ -52,7 +52,6 @@ class PostProcessor(torch.nn.Module):
         - perform NMS
         - add "pred_labels", and "pred_scores" field to the BoxLists corresponding to the prediction
         - keep only features for the selected boxes
-        Note: proposals need to have the PRED_LOGITS field.
         Note: applies NMS and sorts the predicted boxes by score.
 
         :returns:
@@ -238,10 +237,7 @@ class PostProcessor(torch.nn.Module):
 
 
 # noinspection DuplicatedCode
-def build_roi_box_postprocessor(cfg: CfgNode) -> PostProcessor:
-    bbox_reg_weights = cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS
-    box_coder = BoxCoder(weights=bbox_reg_weights, n_dim=cfg.INPUT.N_DIM)
-
+def build_roi_box_postprocessor(cfg: CfgNode, box_coder: BoxCoder) -> PostProcessor:
     score_thresh = cfg.MODEL.ROI_HEADS.SCORE_THRESH
     nms_thresh = cfg.MODEL.ROI_HEADS.NMS
     detections_per_img = cfg.MODEL.ROI_HEADS.DETECTIONS_PER_IMG

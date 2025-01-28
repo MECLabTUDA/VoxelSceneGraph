@@ -12,6 +12,7 @@ from ...abstractions.backbone import AnchorStrides
 from ...abstractions.box_head import BoxHeadTestProposals
 from ...abstractions.loss import RPNLossDict
 from ...abstractions.region_proposal import RPNProposals
+from scene_graph_prediction.modeling.utils.label_assignment import assign_label_to_proposals_always_match_special
 
 
 class RetinaUNetHybridModule(RetinaUNetModule):
@@ -181,15 +182,13 @@ class RetinaUNetHybridModule(RetinaUNetModule):
             unique_objects.BOXES_PER_CLS = torch.tile(unique_objects.boxes, (1, num_classes))
             unique_objects.PRED_SEGMENTATION = proposal.PRED_SEGMENTATION  # We need the same set of fields
 
-            # Check whether we also need to add a LABELS field for relation training
-            if proposal.has_field(BoxList.AnnotationField.LABELS):
-                # Note: this does not take into account that
-                # the segmentation may not be good enough to deserve a positive match
-                # But this should be quite rare
-                unique_objects.LABELS = unique_objects.PRED_LABELS
-
             # Clean-up field that is not otherwise used anywhere else
             proposal.del_field(proposal.PredictionField.PRED_SEGMENTATION_LOGITS)
 
             # Concatenate
             proposals[idx] = BoxListOps.cat([proposal, unique_objects])
+
+    def assign_label_to_proposals(self, proposals: list[BoxList], targets: list[BoxList]):
+        assign_label_to_proposals_always_match_special(
+            proposals, targets, self.cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD, self.num_normal_fg_classes
+        )

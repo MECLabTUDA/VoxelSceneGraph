@@ -14,6 +14,7 @@ from .backbone import Backbone
 from .loss import LossDict
 from .region_proposal import RPN
 from .roi_heads import CombinedROIHeads
+from ..utils.misc import LossComputationCfg
 
 
 class AbstractDetector(torch.nn.Module, ABC):
@@ -57,12 +58,12 @@ class AbstractDetector(torch.nn.Module, ABC):
             self,
             images: ImageList | list[torch.Tensor],
             targets: list[BoxList] | None = None,
-            loss_during_testing: bool = False
+            compute_loss: LossComputationCfg = LossComputationCfg.none()
     ) -> tuple[list[BoxList], LossDict]:
         """
         :param images: images to be processed
         :param targets: ground-truth boxes present in the image (optional)
-        :param loss_during_testing: whether to compute the loss for relevant modules even when evaluating.
+        :param compute_loss: which loss should be computed (even when evaluating).
 
         :returns: The output from the model.
                   During training, it returns a dict[Tensor] which contains the losses.

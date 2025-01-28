@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Hashable
 
 import torch
+
 from scene_graph_api.tensor_structures import BoxListOps as _BoxListOps
 from scene_graph_api.tensor_structures.box_list_ops import BoxListBase
-
 from scene_graph_prediction.layers import nms, nms_3d
 
 _SIZE_T = tuple[int, ...]
@@ -36,17 +36,17 @@ class BoxListOps(_BoxListOps):
         if nms_iou_thresh <= 0:
             # We only need to sort by descending score
             _, sort_ind = boxlist.get_field(score_field).sort(descending=True)
-            return boxlist[sort_ind], torch.empty()
+            return boxlist[sort_ind], sort_ind
         mode = boxlist.mode
         boxlist = boxlist.convert(boxlist.Mode.zyxzyx)
 
         scores = boxlist.get_field(score_field)
         if boxlist.n_dim == 2:
-            keep = nms(boxlist.boxes, scores, nms_iou_thresh)
+            keep = nms(boxlist.boxes, scores, nms_iou_thresh).to(device=boxlist.boxes.device)
         elif boxlist.n_dim == 3:
             keep = nms_3d(boxlist.boxes, scores, nms_iou_thresh).to(device=boxlist.boxes.device)
         else:
-            raise RuntimeError(f"Nms is not implemented for {boxlist.n_dim}D.")
+            raise RuntimeError(f"NMS is not implemented for {boxlist.n_dim}D.")
 
         # Sort kept boxes by score
         _, sort_ind = scores[keep].sort(descending=True)
@@ -57,6 +57,33 @@ class BoxListOps(_BoxListOps):
             sorted_keep = sorted_keep[:max_proposals]
 
         return boxlist[sorted_keep].convert(mode), sorted_keep
+
+    @staticmethod
+    def offset_classwise(
+        boxlist: BoxListBase,
+        offset: float,
+        label_field: Hashable = None
+    ) -> BoxListBase:
+        """
+        Offset all boxes by the given offset times the label index.
+        This ensures that two boxes with different labels do not overlap, as long as the offset is large enough.
+        Operation done is place.
+        """
+        if len(boxlist) == 0:
+            return boxlist
+
+        if label_field is None:
+            label_field = boxlist.PredictionField.PRED_LABELS
+
+        labels = boxlist.get_field(label_field, raise_missing=True)
+
+        # Offset boxes
+        box_offset = labels * offset
+        boxlist.boxes[:, 0] += box_offset
+        if boxlist.mode == boxlist.Mode.zyxzyx:
+            # No need if zyxdhw encoded
+            boxlist.boxes[:, boxlist.n_dim] += box_offset
+        return boxlist
 
     @staticmethod
     def nms_classwise(
@@ -80,37 +107,26 @@ class BoxListOps(_BoxListOps):
         :param label_field: field used to distinguish boxes with different classes for NMS.
         :return top boxes, keep (if thresh > 0 else empty tensor) as idx tensor
         """
+
+        if len(boxlist) == 0:
+            return boxlist, torch.empty(0, device=boxlist.boxes.device).long()
+
         if score_field is None:
             score_field = boxlist.PredictionField.PRED_SCORES
-        if label_field is None:
-            score_field = boxlist.PredictionField.PRED_LABELS
 
         if nms_iou_thresh <= 0:
             # We only need to sort by descending score
             _, sort_ind = boxlist.get_field(score_field).sort(descending=True)
-            return boxlist[sort_ind], torch.empty()
-
-        if len(boxlist) == 0:
-            return boxlist, torch.empty(0, dtype=torch.int64, device=boxlist.boxes.device)
+            return boxlist[sort_ind], sort_ind
 
         # Find out the max size for dim 0
-        labels = boxlist.get_field(label_field, raise_missing=True)
         max_size = torch.max(boxlist.boxes[:, boxlist.n_dim] - boxlist.boxes[:, 0]) + 1
         # Offset boxes
-        offset = labels * max_size
-        boxlist.boxes[:, 0] += offset
-        if boxlist.mode == boxlist.Mode.zyxzyx:
-            # No need if zyxdhw encoded
-            boxlist.boxes[:, boxlist.n_dim] += offset
-
+        BoxListOps.offset_classwise(boxlist, max_size, label_field)
         # Perform NMS
         _, keep = BoxListOps.nms(boxlist, nms_iou_thresh, max_proposals=max_proposals, score_field=score_field)
-
         # Since we have shallow copies, we need to remove the offset again...
-        boxlist.boxes[:, 0] -= offset
-        if boxlist.mode == boxlist.Mode.zyxzyx:
-            # No need if zyxdhw encoded
-            boxlist.boxes[:, boxlist.n_dim] -= offset
+        BoxListOps.offset_classwise(boxlist, -max_size, label_field)
 
         return boxlist[keep], keep
 

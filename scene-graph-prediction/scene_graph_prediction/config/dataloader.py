@@ -42,5 +42,5 @@ DATALOADER.KNOWLEDGE_GUIDED_RELATION_GROUPING = False
 DATALOADER.STRICT_SAMPLING = False
 
 # Has to be used with either KNOWLEDGE_GUIDED_BOX_GROUPING or KNOWLEDGE_GUIDED_RELATION_GROUPING.
-# How many batches should be generated before selecting the next group
-DATALOADER.ITER_PER_GROUP = 10
+# How many samples from a given group are sampled before selecting the next group.
+DATALOADER.SAMPLES_PER_GROUP = 1

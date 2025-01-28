@@ -15,9 +15,9 @@ class HybridRetinaUNet(RetinaUNet):
     """
 
     def __init__(self, cfg: CfgNode):
-        # MASK_ON is not required anymore, e.g. we do detection through segmentation but no evaluation on the seg
-        # assert cfg.MODEL.MASK_ON, "Masks need to be on for Retina-UNet."
-        assert cfg.MODEL.REQUIRE_SEMANTIC_SEGMENTATION, "Masks need to be provided as semantic segmentation."
+        # We can't assert that we're computing any loss, and as such need any semantic segmentation annotation
+        # assert cfg.MODEL.REQUIRE_SEMANTIC_SEGMENTATION, "Masks need to be provided as semantic segmentation."
+        assert not cfg.MODEL.RETINANET.TWO_STAGE, "Not supported."
 
         # Note: it's important to skip RetinaNet's constructor to avoid building the backbone/RPN/ROIHeads twice
         backbone = FPN(cfg.INPUT.N_DIM, cfg.INPUT.N_CHANNELS)
@@ -30,9 +30,10 @@ class HybridRetinaUNet(RetinaUNet):
                 cfg,
                 in_channels=backbone.out_channels,
                 anchor_strides=backbone.feature_strides,
+                detector_is_one_stage=False,
                 is_rpn_only=cfg.MODEL.RPN_ONLY,
-                has_boxes=cfg.MODEL.RETINANET.TWO_STAGE or cfg.MODEL.ROI_HEADS_ONLY,
-                has_masks=False,  # The segmentation is already handled by the RetinaUNetModule
+                has_boxes=cfg.MODEL.BOX_ON,
+                has_masks=cfg.MODEL.MASK_ON,  # Explanation: see comment in RetinaUNet
                 has_keypoints=cfg.MODEL.KEYPOINT_ON,
                 has_attributes=cfg.MODEL.ATTRIBUTE_ON,
                 has_relations=cfg.MODEL.RELATION_ON,

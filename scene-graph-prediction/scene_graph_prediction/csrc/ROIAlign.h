@@ -5,6 +5,7 @@
 
 #ifdef WITH_CUDA
 #include "cuda/vision.h"
+#include "cuda_runtime_api.h"
 #endif
 
 // Interface for Python
@@ -16,6 +17,7 @@ at::Tensor ROIAlign_forward(const at::Tensor& input,
                             const int sampling_ratio) {
   if (input.is_cuda()) {
 #ifdef WITH_CUDA
+    cudaSetDevice(input.options().device().index());
     return ROIAlign_forward_cuda(input, rois, spatial_scale, pooled_height, pooled_width, sampling_ratio);
 #else
     AT_ERROR("Not compiled with GPU support");
@@ -34,6 +36,7 @@ at::Tensor ROIAlign_forward_3d(const at::Tensor& input,
                                const int sampling_ratio) {
   if (input.is_cuda()) {
 #ifdef WITH_CUDA
+    cudaSetDevice(input.options().device().index());
     return ROIAlign_forward_cuda_3d(
         input,
         rois,
@@ -64,6 +67,7 @@ at::Tensor ROIAlign_backward(const at::Tensor& grad,
                              const int sampling_ratio) {
   if (grad.is_cuda()) {
 #ifdef WITH_CUDA
+    cudaSetDevice(grad.options().device().index());
     return ROIAlign_backward_cuda(
         grad,
         rois,
@@ -99,6 +103,7 @@ at::Tensor ROIAlign_backward_3d(const at::Tensor& grad,
                                 const int sampling_ratio) {
   if (grad.is_cuda()) {
 #ifdef WITH_CUDA
+    cudaSetDevice(grad.options().device().index());
     return ROIAlign_backward_cuda_3d(
         grad,
         rois,

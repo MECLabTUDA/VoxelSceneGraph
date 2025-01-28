@@ -21,14 +21,16 @@ class GeneralizedRCNN(BaseDetector):
 
     def __init__(self, cfg: CfgNode):
         backbone = build_backbone(cfg)
+        rpn = build_rpn(cfg, backbone.out_channels, backbone.feature_strides)
         super().__init__(
             cfg,
             backbone,
-            build_rpn(cfg, backbone.out_channels, backbone.feature_strides),
+            rpn,
             build_roi_heads(
                 cfg,
                 in_channels=backbone.out_channels,
                 anchor_strides=backbone.feature_strides,
+                detector_is_one_stage=rpn.is_one_stage_detector(),
                 is_rpn_only=cfg.MODEL.RPN_ONLY,
                 has_boxes=True,
                 has_masks=cfg.MODEL.MASK_ON,

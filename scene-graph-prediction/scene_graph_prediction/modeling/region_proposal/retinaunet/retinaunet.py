@@ -32,11 +32,6 @@ class RetinaUNetModule(RetinaNetModule):
                                          kernel_size=1, stride=1, padding=0, norm=None, activation=False)
         self.seg_loss_eval = build_retinaunet_seg_loss_evaluator(self.n_dim, cfg.INPUT.N_OBJ_CLASSES)
 
-        # Some processing is not required for training the object detector
-        #  e.g. produce the predicted semantic segmentation
-        # But this can be required for training later parts of the model, e.g. relation head...
-        self.training_requires_full_processing = self.cfg.MODEL.RELATION_ON or self.cfg.MODEL.ROI_HEADS_ONLY
-
     def _forward_box_detection(self, images: ImageList, features: FeatureMaps):
         anchors, class_logits, box_regression = super()._forward_box_detection(images, features)
         seg_logits = self.final_seg_conv(features[0])

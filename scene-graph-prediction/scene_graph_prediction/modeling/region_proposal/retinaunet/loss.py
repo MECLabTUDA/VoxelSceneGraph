@@ -17,6 +17,8 @@ class RetinaUNetSegLossComputation(torch.nn.Module):
         self.num_classes = num_classes  # Including the background
 
     def forward(self, seg_logits: SegLogits, targets: list[BoxList]) -> torch.Tensor:
+        assert len(seg_logits) == 1, \
+            "FIXME this whole mess of a code only works for a single image (otherwise a batch dim is added)"
         flat_gt_seg = [target.SEGMENTATION.view(-1) for target in targets]
         # Since segmentations are not padded, they can have different sizes
         # As such we flatten them to 1D and concatenate together
@@ -54,9 +56,10 @@ class RetinaUNetSegLossComputation(torch.nn.Module):
         denominator = (flat_softmax_logits ** 2 + one_hot_seg ** 2).sum(0)
         eps = 1e-6
         # The background is already excluded from the calculation
+        # noinspection PyTypeChecker
         return 1. - torch.mean(((2 * intersection + eps) / (denominator + eps)))
 
-    def _one_hot_encode_seg(self, cat_flat_gt_seg: torch.Tensor) -> torch.Tensor:
+    def _one_hot_encode_seg(self, cat_flat_gt_seg: torch.Tensor) -> torch.LongTensor:
         """
         One-hot encode all foreground classes for a GT segmentation (channel 0 for background is already removed).
         :param cat_flat_gt_seg: 1D tensor with GT segmentation.
@@ -66,6 +69,7 @@ class RetinaUNetSegLossComputation(torch.nn.Module):
         one_hot = torch.zeros(shape, dtype=torch.long, device=cat_flat_gt_seg.device)
         for cls_idx in range(1, self.num_classes):
             one_hot[:, cls_idx - 1][cat_flat_gt_seg == cls_idx] = 1
+        # noinspection PyTypeChecker
         return one_hot
 
 

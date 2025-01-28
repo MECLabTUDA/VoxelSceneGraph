@@ -235,10 +235,6 @@ __global__ void RoIAlignForward3D(const int nthreads, const scalar_t *bottom_dat
                            ? sampling_ratio 
                            : ceil(roi_width / pooled_width);
 
-    scalar_t d = (scalar_t)(pd + 0.5) * bin_size_d + roi_start_d;
-    scalar_t h = (scalar_t)(ph + 0.5) * bin_size_h + roi_start_h;
-    scalar_t w = (scalar_t)(pw + 0.5) * bin_size_w + roi_start_w;
-
     scalar_t output_val = 0;
     for (int iz = 0; iz < sampling_ratio_d; iz++) {
       const scalar_t z = roi_start_d + pd * bin_size_d +
@@ -389,10 +385,10 @@ __global__ void RoIAlignBackwardFeature(
     int roi_batch_ind = offset_bottom_rois[0];
 
     // Do not using rounding; this implementation detail is critical
-    T roi_start_w = offset_bottom_rois[1] * spatial_scale;
-    T roi_start_h = offset_bottom_rois[2] * spatial_scale;
-    T roi_end_w = offset_bottom_rois[3] * spatial_scale;
-    T roi_end_h = offset_bottom_rois[4] * spatial_scale;
+    T roi_start_h = offset_bottom_rois[1] * spatial_scale;
+    T roi_start_w = offset_bottom_rois[2] * spatial_scale;
+    T roi_end_h = offset_bottom_rois[3] * spatial_scale;
+    T roi_end_w = offset_bottom_rois[4] * spatial_scale;
 
     // Force malformed ROIs to be 1x1
     T roi_width = max(roi_end_w - roi_start_w + 1, (T)1.);
@@ -494,10 +490,6 @@ __global__ void RoIAlignBackwardFeature3D(
     int sample_num_w = (sample_num > 0) ? sample_num : ceil(roi_width / pooled_width);
 
     const scalar_t count = (scalar_t)(sample_num_d * sample_num_h * sample_num_w);
-
-    scalar_t d = (scalar_t)(pd + 0.5) * bin_size_d + roi_start_d;
-    scalar_t h = (scalar_t)(ph + 0.5) * bin_size_h + roi_start_h;
-    scalar_t w = (scalar_t)(pw + 0.5) * bin_size_w + roi_start_w;
 
     for (int iz = 0; iz < sample_num_d; iz++) {
       const scalar_t z =

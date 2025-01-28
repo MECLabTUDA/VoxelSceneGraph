@@ -30,12 +30,13 @@ class EvaluationType(IntFlag):
 
 class IouType(Enum):
     """Extends IouTypes from pycocotools3d for other applications/metrics."""
-    BoundingBox = CocoIouType.BoundingBox.value  # mAP
+    BoundingBox = CocoIouType.BoundingBox.value  # AR / AP for object detectors
     Keypoints = CocoIouType.Keypoints.value
-    Segmentation = CocoIouType.Segmentation.value
+    Segmentation = CocoIouType.Segmentation.value  # AR / AP for object detectors with a matching based on masks
     Attributes = "attributes"
-    Relations = "relations"
-    RegionProposal = "box_proposal"  # mAR
+    Relations = "relations"  # R / mR / mAP for relations among other metrics
+    MaskRelations = "mask_relations"  # Relations but with a matching based on masks
+    RegionProposal = "box_proposal"  # Binary AR for RPN
 
     def to_coco(self) -> CocoIouType:
         match self:

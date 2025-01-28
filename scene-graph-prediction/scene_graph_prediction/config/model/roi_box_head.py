@@ -7,6 +7,8 @@ from scene_graph_prediction.utils.config import AccessTrackingCfgNode
 ROI_BOX_HEAD = AccessTrackingCfgNode()
 # Feature extractor
 ROI_BOX_HEAD.FEATURE_EXTRACTOR = "FPN2MLPFeatureExtractor"
+# Model for feature extraction from mask
+ROI_BOX_HEAD.MASK_FEATURE_EXTRACTOR = "Factor444RelationMaskFeatureExtractor"
 # Predictor class (box classification and regression)
 ROI_BOX_HEAD.PREDICTOR = "BoxPredictor"
 # Loss to use for box regression
@@ -22,7 +24,7 @@ ROI_BOX_HEAD.POOLER_SAMPLING_RATIO = 0
 ROI_BOX_HEAD.ADD_GTBOX_TO_PROPOSAL_IN_TRAIN = False
 # Whether to remove predicted objects that have no matching groundtruth object
 ROI_BOX_HEAD.REMOVE_OBJ_NO_MATCH = False
-# Siwe of the 1D feature representation produced by the feature extractor and fed to the predictor
+# Size of the 1D feature representation produced by the feature extractor and fed to the predictor
 ROI_BOX_HEAD.FEATURE_REPRESENTATION_SIZE = 2048
 
 # Whether to add a group norm layer to feature extractors that support it

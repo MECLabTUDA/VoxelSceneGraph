@@ -1,8 +1,9 @@
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 
-from ...utils import SGGEvaluationMode
+from ...utils import SGGEvaluationMode, IouType
 
 
 @dataclass
@@ -22,6 +23,8 @@ class MetaContext:
     ks: list[int]
     # For no graph constraint, up to how many predictions are considered per (sub, ob) pair
     no_gc_top_n_pred: int
+    # Whether we find matches between predictions and ground truth using bounding boxes or segmentation masks
+    matching_type: Literal[IouType.BoundingBox, IouType.Segmentation]
 
 
 @dataclass
@@ -41,6 +44,9 @@ class ImageContext:
     pred_rel_idxs: np.ndarray | None  # Relation with bbox ids if we're not computing upper bounds
     pred_rel_scores: np.ndarray | None  # If we're not computing upper bounds
     pred_rel_labels: np.ndarray | None  # If we're not computing upper bounds
+    # About masks of detected objects
+    gt_masks: np.ndarray | None  # If we're not detecting based on masks
+    pred_masks: np.ndarray | None  # If we're not detecting based on masks
 
 
 # Some type hints for results structure:

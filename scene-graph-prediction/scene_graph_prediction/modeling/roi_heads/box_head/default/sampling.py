@@ -23,7 +23,7 @@ class FastRCNNSampling:
     def __init__(
             self,
             proposal_matcher: Matcher,
-            fg_bg_sampler: BalancedSampler,
+            fg_bg_sampler: Sampler,
             box_coder: BoxCoder,
             encode_targets: bool,
             attribute_on: bool
@@ -42,7 +42,7 @@ class FastRCNNSampling:
         """
         matched_idxs = self.proposal_matcher(target, proposal)
 
-        # Fast RCNN only need "labels" field for selecting the targets
+        # Fast RCNN only needs "labels" field for selecting the targets
         # Get the targets corresponding GT for each proposal
         # Note: need to clamp the indices because we can have a single GT in the image, 
         # and matched_idxs can be -2, which goes out of bounds
@@ -111,7 +111,8 @@ class FastRCNNSampling:
 
     def subsample(self, proposals: RPNProposals, targets: BoxHeadTargets) -> list[torch.BoolTensor]:
         """
-        Add groundtruth fields to proposals (LABELS, REGRESSION_TARGETS, MATCHED_IDXS, and optionally ATTRIBUTES).
+        Add groundtruth fields to proposals (LABELS, REGRESSION_TARGETS, MATCHED_IDXS,
+        and optionally ATTRIBUTES, IMPORTANCE).
         Perform the positive/negative sampling, and return the sampling mask.
         """
         labels, attributes, regression_targets, matched_idxs = self._prepare_targets(proposals, targets)
@@ -119,19 +120,29 @@ class FastRCNNSampling:
         proposals = list(proposals)
         # Iterate over images in batch
         # Add corresponding label and regression_targets information to the bounding boxes
-        for labels, attributes, regression_targets, matched_idxs, proposal in \
-                zip(labels, attributes, regression_targets, matched_idxs, proposals):
-            proposal.LABELS = labels
+        for label, attribute, regression_target, matched_idx, proposal, target in \
+                zip(labels, attributes, regression_targets, matched_idxs, proposals, targets):
+            proposal.LABELS = label
             # Used for loss computation...
-            proposal.REGRESSION_TARGETS = regression_targets
+            proposal.REGRESSION_TARGETS = regression_target
             # ...and this one also in other ROI heads
-            proposal.MATCHED_IDXS = matched_idxs
+            proposal.MATCHED_IDXS = matched_idx
             if self.attribute_on:
-                proposal.ATTRIBUTES = attributes
+                proposal.ATTRIBUTES = attribute
+            if target.has_field(BoxList.AnnotationField.IMPORTANCE):
+                proposal.IMPORTANCE = target.IMPORTANCE[matched_idx.clamp(min=0)]
+                # Need to set the importance to a normal level for objects that have not been matched
+                proposal.IMPORTANCE[matched_idx < 0] = 1.
+                # Ignore any object with a weight of 0
+                label[torch.abs(proposal.IMPORTANCE) < 1e-5] = Sampler.IGNORE
 
-        sampled_pos_mask, sampled_neg_mask = self.fg_bg_sampler(labels)
+        # The balanced sampler does not use the FG probabilities of predictions
+        # Note: the sampling would have to happen later too
+        # noinspection PyTypeChecker
+        sampled_pos_mask, sampled_neg_mask = self.fg_bg_sampler(labels, None)
+        # noinspection PyTypeChecker
         return [
-            pos_mask_img | neg_mask_img
+            torch.logical_or(pos_mask_img, neg_mask_img)
             for pos_mask_img, neg_mask_img in zip(sampled_pos_mask, sampled_neg_mask)
         ]
 
@@ -164,6 +175,7 @@ def build_roi_box_samp_processor(cfg: CfgNode, encode_targets: bool) -> FastRCNN
         always_keep_best_match=False
     )
 
+    # Only works with the BalancedSampler because we don't have the classification scores yet
     fg_bg_sampler = BalancedSampler(
         cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE,
         cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION

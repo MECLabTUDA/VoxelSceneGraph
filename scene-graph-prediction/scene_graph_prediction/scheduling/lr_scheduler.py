@@ -53,6 +53,9 @@ class WarmupMultiStepLR(torch.optim.lr_scheduler._LRScheduler):
 
 
 class MetricsAwareScheduler(torch.optim.lr_scheduler._LRScheduler, ABC):
+    stage_count: int
+
+    # noinspection PyMethodOverriding
     @abstractmethod
     def step(self, metrics: float | None, epoch: int | None = None):
         """

@@ -44,27 +44,24 @@ MODEL.ROI_RELATION_HEAD = ROI_RELATION_HEAD
 # Note: this will also trigger the RetinaNet to behave like a two-stage method
 MODEL.RPN_ONLY = False
 
-# Whether we're only training the roi heads
-# Note: detectors using one-stage object detectors will assume that they have a box head.
-# Note: this can be useful when training a one-stage RetinaNet and wanting to train a box head later
-#       to have a pretrained feature extractor for relation detection.
-# Note: go check MODEL.PRETRAINED_ONE_STAGE_DETECTOR_CKPT.
-MODEL.ROI_HEADS_ONLY = False
-
 # When training ROI heads, we only need to crop relevant parts of the feature maps
 # So, when we're not training the RPN (or one-stage detector), there is no gradient for the features maps
 # and these can be discarded after being cropped.
 # So by, computing the feature maps of images one-by-one, and only keeping relevant features,
 # we can significantly increase the batch size.
+# Note: only implemented for training though.
 MODEL.OPTIMIZED_ROI_HEADS_PIPELINE = False
 
 # Which region proposal method to use ("RPN", "RetinaNet", "RetinaUNet"...)
 # Note: the region proposal choice may be fixed with some detectors.
 MODEL.REGION_PROPOSAL = "RPN"
+# Because we also have one-stage detectors, we cannot just assume that we have a box head, e.g. even with a mask head
+MODEL.BOX_ON = False
 MODEL.MASK_ON = False
 
 # Which Box Head to use.
 MODEL.BOX_HEAD = "ROIBoxHead"
+MODEL.MASK_HEAD = "ROIMaskHead"
 
 # Whether the segmentation should be provided as semantic segmentation
 # Note: does not require MASK_ON to be True to enable segmentation-based detection.
@@ -81,14 +78,10 @@ MODEL.CLS_AGNOSTIC_BBOX_REG = False
 
 # If the WEIGHT starts with a catalog://, like :R-50, the code will look for the path in paths_catalog.
 # Else, it will use it as the specified absolute path
-MODEL.WEIGHT = ""
+MODEL.WEIGHT = None
 
 # Path to the .pth checkpoint file from the object detection training
 MODEL.PRETRAINED_DETECTOR_CKPT = ""
-
-# Path to the .pth checkpoint file from the one-stage object detection training
-# Note: go check MODEL.ROI_HEADS_ONLY.
-MODEL.PRETRAINED_ONE_STAGE_DETECTOR_CKPT = ""
 
 # Whether the IMPORTANCE field should be used to weight the detection of boxes.
 # Note: the importance is defaulted to (1 + #rels implicating this object) if not supplied.

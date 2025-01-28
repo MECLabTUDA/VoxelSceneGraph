@@ -19,23 +19,19 @@ class RetinaNetPostProcessor(RPNPostProcessor):
             self,
             pre_nms_score_thresh: float,
 
-            # FIXME the pre_nms_top_n are not used for RetinaNet
-            pre_nms_top_n_train: int,
             post_nms_top_n_train: int,
-            pre_nms_top_n_test: int,
             post_nms_top_n_test: int,
 
             nms_thresh: float,
             n_dim: int,
             box_coder: BoxCoder,
             num_fg_classes: int,  # Excluding the background
-            is_binary_classification: bool,
-            roi_heads_only: bool = False
+            is_binary_classification: bool
     ):
         super().__init__(
-            pre_nms_top_n_train,
+            0,  # Not used anyway
             post_nms_top_n_train,
-            pre_nms_top_n_test,
+            0,  # Not used anyway
             post_nms_top_n_test,
             nms_thresh,
             n_dim,
@@ -47,7 +43,6 @@ class RetinaNetPostProcessor(RPNPostProcessor):
         if is_binary_classification:
             assert num_fg_classes == 1, num_fg_classes
         self.is_binary_classification = is_binary_classification
-        self.roi_heads_only = roi_heads_only
 
     def _forward_for_single_feature_map(
             self,
@@ -79,7 +74,7 @@ class RetinaNetPostProcessor(RPNPostProcessor):
                 zip(flat_cls_score, flat_cls_logits, flat_box_regression, pre_nms_top_n, candidate_indexes, anchors):
             # Select candidates only and compute topk (we only keep classes with score above thr)
             fg_class_score = cls_score[per_candidate_indexes]
-            topk_fg_cls_score, topk_indices = fg_class_score.topk(min(per_pre_nms_top_n, pre_nms_top_n), sorted=False)
+            topk_fg_cls_score, topk_indices = fg_class_score.topk(per_pre_nms_top_n, sorted=False)
 
             # Note: it's important to do nonzero first,
             # such that the produced indexes can be used on the pre-topk tensors
@@ -164,14 +159,11 @@ def build_retinanet_postprocessor(
     """
     return RetinaNetPostProcessor(
         pre_nms_score_thresh=cfg.MODEL.RETINANET.INFERENCE_TH,
-        pre_nms_top_n_train=cfg.MODEL.RPN.PRE_NMS_TOP_N_TRAIN,
         post_nms_top_n_train=cfg.MODEL.RPN.POST_NMS_TOP_N_TRAIN,
-        pre_nms_top_n_test=cfg.MODEL.RPN.PRE_NMS_TOP_N_TEST,
         post_nms_top_n_test=cfg.MODEL.RPN.POST_NMS_TOP_N_TEST,
         nms_thresh=cfg.MODEL.RPN.NMS_THRESH,
         n_dim=cfg.INPUT.N_DIM,
         box_coder=box_coder,
         num_fg_classes=num_fg_classes,
-        is_binary_classification=is_binary_classification,
-        roi_heads_only=cfg.MODEL.ROI_HEADS_ONLY
+        is_binary_classification=is_binary_classification
     )

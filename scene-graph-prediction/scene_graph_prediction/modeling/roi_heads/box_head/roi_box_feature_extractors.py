@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+import numpy as np
 import torch
 from torch import nn
 from torch.nn.functional import relu
@@ -10,17 +11,28 @@ from scene_graph_prediction.modeling.utils import build_pooler, build_pooler_ext
 from scene_graph_prediction.modeling.utils.build_layers import build_group_norm, build_fc, build_conv, NormType
 
 
-@ROI_BOX_FEATURE_EXTRACTORS.register("ResNet50Conv5ROIFeatureExtractor")
-class ResNet50Conv5ROIFeatureExtractor(ROIBoxFeatureExtractor):
+class ResNet50Conv5ROIFeatureExtractorBase(ROIBoxFeatureExtractor):
     """
     We consider the output of the pooler as a 2D/3D volume and use convolutions to extract information.
     Then we use adaptive pooling to convert the features to a 1D feature vector.
     # Note: not tested...
     Note: supports 2D and 3D.
     """
+    is_mask_head_compatible = True
 
-    def __init__(self, cfg: CfgNode, _: int, anchor_strides: AnchorStrides, __: bool = False, ___: bool = False):
-        super().__init__(cfg, _, __, ___)
+    def __init__(
+            self,
+            cfg: CfgNode,
+            _: int,
+            anchor_strides: AnchorStrides,
+            roi_head_name: ROIHeadName,
+            half_out: bool = False,
+            cat_all_levels: bool = False,
+            level_mapper_name: str = "FPNLevelMapper"
+    ):
+        assert not half_out, "Not supported"
+        assert not cat_all_levels, "Not supported"
+        super().__init__(cfg, _, anchor_strides, half_out, cat_all_levels)
         self.n_dim = cfg.INPUT.N_DIM
         assert self.n_dim in [2, 3]
 
@@ -37,19 +49,24 @@ class ResNet50Conv5ROIFeatureExtractor(ROIBoxFeatureExtractor):
             dilation=cfg.MODEL.RESNETS.RES5_DILATION
         )
 
-        self.pooler = build_pooler(cfg, ROIHeadName.BoundingBox, anchor_strides)
-
-        self.avg_pool = torch.nn.AdaptiveAvgPool2d(1) if self.n_dim == 2 else torch.nn.AdaptiveAvgPool3d(1)
+        self.pooler = build_pooler(cfg, roi_head_name, anchor_strides, level_mapper_name=level_mapper_name)
         # Only made possible by the average pooling
         self.representation_size = self.head.out_channels
 
     def forward_without_pool(self, x: torch.Tensor) -> BoxHeadFeatures:
-        x = self.head(x)
-        # Pool from NxCxDxHxW to NxCx1x1x1
-        x = self.avg_pool(x)
+        return self.head(x)
 
-        # Flatten the features
-        return x.squeeze()
+    def output_size(self) -> tuple[int, ...]:
+        # TODO figure this out based on self.pooler.output_size
+        raise NotImplementedError
+
+
+@ROI_BOX_FEATURE_EXTRACTORS.register("ResNet50Conv5ROIFeatureExtractor")
+class ResNet50Conv5ROIFeatureExtractor(ResNet50Conv5ROIFeatureExtractorBase):
+    is_mask_head_compatible = True
+
+    def __init__(self, cfg: CfgNode, _: int, anchor_strides: AnchorStrides, __: bool = False, ___: bool = False):
+        super().__init__(cfg, _, anchor_strides, ROIHeadName.BoundingBox, __, ___)
 
 
 @ROI_BOX_FEATURE_EXTRACTORS.register("FPN2MLPFeatureExtractor")
@@ -58,6 +75,7 @@ class FPN2MLPFeatureExtractor(ROIBoxFeatureExtractor):
     We consider the output of the pooler as a flattened vector and feed it to an MLP.
     Note: supports 2D and 3D.
     """
+    is_mask_head_compatible = False
 
     def __init__(
             self,
@@ -67,7 +85,7 @@ class FPN2MLPFeatureExtractor(ROIBoxFeatureExtractor):
             half_out: bool = False,
             cat_all_levels: bool = False
     ):
-        super().__init__(cfg, in_channels, half_out, cat_all_levels)
+        super().__init__(cfg, in_channels, anchor_strides, half_out, cat_all_levels)
         self.n_dim = cfg.INPUT.N_DIM
         assert self.n_dim in [2, 3]
 
@@ -96,28 +114,35 @@ class FPN2MLPFeatureExtractor(ROIBoxFeatureExtractor):
         x = relu(self.fc7(x))
         return x
 
+    def output_size(self) -> tuple[int, ...]:
+        return self.representation_size,
 
-@ROI_BOX_FEATURE_EXTRACTORS.register("FPNXconv1fcFeatureExtractor")
-class FPNXconv1fcFeatureExtractor(ROIBoxFeatureExtractor):
+
+class FPNXconv1fcFeatureExtractorBase(ROIBoxFeatureExtractor):
     """
     Heads for FPN for classification.
     # Note: not tested...
     Note: supports 2D and 3D.
     """
+    is_mask_head_compatible = True
 
     def __init__(
             self,
             cfg: CfgNode,
             in_channels: int,
             anchor_strides: AnchorStrides,
-            _: bool = False,
-            __: bool = False
+            roi_head_name: ROIHeadName,
+            half_out: bool = False,
+            cat_all_levels: bool = False,
+            level_mapper_name: str = "FPNLevelMapper"
     ):
-        super().__init__(cfg, in_channels, _, __)
+        super().__init__(cfg, in_channels, anchor_strides, half_out, cat_all_levels)
         self.n_dim = cfg.INPUT.N_DIM
         assert self.n_dim in [2, 3]
+        assert not half_out, "Not supported"
+        assert not cat_all_levels, "Not supported"
 
-        self.pooler = build_pooler(cfg, ROIHeadName.BoundingBox, anchor_strides)
+        self.pooler = build_pooler(cfg, roi_head_name, anchor_strides, level_mapper_name=level_mapper_name)
 
         use_gn = cfg.MODEL.ROI_BOX_HEAD.USE_GN
         conv_head_dim = cfg.MODEL.ROI_BOX_HEAD.CONV_HEAD_DIM
@@ -150,36 +175,59 @@ class FPNXconv1fcFeatureExtractor(ROIBoxFeatureExtractor):
                 if not use_gn:
                     torch.nn.init.constant_(layer.bias, 0)
 
-        self.avg_pool = torch.nn.AdaptiveAvgPool2d(1) if self.n_dim == 2 else torch.nn.AdaptiveAvgPool3d(1)
         self.representation_size = conv_head_dim
 
     def forward_without_pool(self, x: torch.Tensor) -> BoxHeadFeatures:
-        x = self.x_convs(x)
-        # Pool from NxCxDxHxW to NxCx1x1x1
-        x = self.avg_pool(x)
-        return x.squeeze()
+        return self.x_convs(x)
+
+    def output_size(self) -> tuple[int, ...]:
+        # TODO figure this out based on self.pooler.output_size
+        raise NotImplementedError
 
 
-@ROI_BOX_FEATURE_EXTRACTORS.register("RetinaNetClsTowerFeatureExtractor")
-class RetinaNetClsTowerFeatureExtractor(ROIBoxFeatureExtractor):
-    """
-    Classifier head from RetinaNet, but without the final the prediction convolution.
-    Note: supports 2D and 3D.
-    """
-
+@ROI_BOX_FEATURE_EXTRACTORS.register("FPNXconv1fcFeatureExtractor")
+class FPNXconv1fcFeatureExtractor(FPNXconv1fcFeatureExtractorBase):
     def __init__(
             self,
             cfg: CfgNode,
             in_channels: int,
             anchor_strides: AnchorStrides,
             _: bool = False,
-            cat_all_levels: bool = False
+            __: bool = False
     ):
-        super().__init__(cfg, in_channels, _, cat_all_levels)
+        super().__init__(cfg, in_channels, anchor_strides, ROIHeadName.BoundingBox, _, __)
+
+
+class RetinaNetClsTowerFeatureExtractorBase(ROIBoxFeatureExtractor):
+    """
+    Classifier head from RetinaNet, but without the final the prediction convolution.
+    Note: supports 2D and 3D.
+    """
+    is_mask_head_compatible = True
+
+    def __init__(
+            self,
+            cfg: CfgNode,
+            in_channels: int,
+            anchor_strides: AnchorStrides,
+            roi_head_name: ROIHeadName,
+            half_out: bool = False,
+            cat_all_levels: bool = False,
+            level_mapper_name: str = "FPNLevelMapper"
+    ):
+        super().__init__(cfg, in_channels, anchor_strides, half_out, cat_all_levels)
         self.n_dim = cfg.INPUT.N_DIM
         assert self.n_dim in [2, 3]
+        assert not half_out
 
-        self.pooler = build_pooler_extra_args(cfg, ROIHeadName.BoundingBox, anchor_strides, in_channels, cat_all_levels)
+        self.pooler = build_pooler_extra_args(
+            cfg,
+            roi_head_name,
+            anchor_strides,
+            in_channels,
+            cat_all_levels,
+            level_mapper_name=level_mapper_name
+        )
 
         n_features = 256 if self.n_dim == 2 else 128
         # Classification
@@ -190,15 +238,36 @@ class RetinaNetClsTowerFeatureExtractor(ROIBoxFeatureExtractor):
             build_conv(self.n_dim, n_features, representation_size,
                        kernel_size=3, stride=1, padding=1, norm=NormType.Group, activation=True)
         )
-
-        self.avg_pool = torch.nn.AdaptiveAvgPool2d(1) if self.n_dim == 2 else torch.nn.AdaptiveAvgPool3d(1)
         self.representation_size = representation_size
 
     def forward_without_pool(self, x: torch.Tensor) -> BoxHeadFeatures:
-        x = self.cls_tower(x)
-        # Pool from NxCxDxHxW to NxCx1x1x1
-        x = self.avg_pool(x)
-        return x.squeeze()
+        return self.cls_tower(x)
+
+    def output_size(self) -> tuple[int, ...]:
+        pooler_res = self.cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        if self.n_dim == 2:
+            return self.representation_size, pooler_res, pooler_res
+        else:
+            return self.representation_size, self.cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION_DEPTH, pooler_res, pooler_res
+
+
+@ROI_BOX_FEATURE_EXTRACTORS.register("RetinaNetClsTowerFeatureExtractor")
+class RetinaNetClsTowerFeatureExtractor(RetinaNetClsTowerFeatureExtractorBase):
+    """
+    Classifier head from RetinaNet, but without the final the prediction convolution.
+    Note: supports 2D and 3D.
+    """
+    is_mask_head_compatible = True
+
+    def __init__(
+            self,
+            cfg: CfgNode,
+            in_channels: int,
+            anchor_strides: AnchorStrides,
+            _: bool = False,
+            cat_all_levels: bool = False
+    ):
+        super().__init__(cfg, in_channels, anchor_strides, ROIHeadName.BoundingBox, _, cat_all_levels)
 
 
 @ROI_BOX_FEATURE_EXTRACTORS.register("DownScaleConvFeatureExtractor")
@@ -210,18 +279,20 @@ class DownScaleConvFeatureExtractor(ROIBoxFeatureExtractor):
     to fit the representation size (given the final the spatial shape post-convolution).
     Note: supports 2D and 3D.
     """
+    is_mask_head_compatible = False
 
     def __init__(
             self,
             cfg: CfgNode,
             in_channels: int,
             anchor_strides: AnchorStrides,
-            _: bool = False,
+            half_out: bool = False,
             cat_all_levels: bool = False
     ):
-        super().__init__(cfg, in_channels, _, cat_all_levels)
+        super().__init__(cfg, in_channels, anchor_strides, half_out, cat_all_levels)
         self.n_dim = cfg.INPUT.N_DIM
         assert self.n_dim in [2, 3]
+        assert not half_out
 
         self.pooler = build_pooler_extra_args(cfg, ROIHeadName.BoundingBox, anchor_strides, in_channels, cat_all_levels)
 
@@ -236,7 +307,7 @@ class DownScaleConvFeatureExtractor(ROIBoxFeatureExtractor):
             # 2x2x2=8 downscale factor, per level and 2 levels = 64
             post_conv_size = resolution_depth * resolution * resolution // 64
         assert representation_size % post_conv_size == 0, \
-            f"Representation size {representation_size} is not divisiable by {post_conv_size}."
+            f"Representation size {representation_size} is not divisible by {post_conv_size}."
         final_features = representation_size // post_conv_size
         n_features = 256 if self.n_dim == 2 else 128
 
@@ -264,8 +335,15 @@ class DownScaleConvFeatureExtractor(ROIBoxFeatureExtractor):
 
     def forward_without_pool(self, x: torch.Tensor) -> BoxHeadFeatures:
         x = self.x_convs(x)
-        # Then just flatten
-        return x.view(x.shape[0], -1)
+        # Then just flatten (with a safeguard against completely empty proposals)
+        return x.view(x.shape[0], np.prod(x.shape[1:]))
+
+    def output_size(self) -> tuple[int, ...]:
+        res = self.cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION // 4
+        if self.n_dim == 2:
+            return self.representation_size, res, res
+        else:
+            return self.representation_size, self.cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION_DEPTH // 4, res, res
 
 
 def build_feature_extractor(

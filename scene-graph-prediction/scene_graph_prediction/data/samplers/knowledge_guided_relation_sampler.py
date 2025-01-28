@@ -21,7 +21,7 @@ class KnowledgeGuidedRelationSampler(KnowledgeGuidedAbstractSampler):
             self,
             cfg: CfgNode,
             batch_size: int,
-            iterations_per_group: int,
+            samples_per_group: int,
             num_batches: int,
             start_batch: int,
             strict_sampling: bool = False,
@@ -34,7 +34,7 @@ class KnowledgeGuidedRelationSampler(KnowledgeGuidedAbstractSampler):
             cfg=cfg,
             batch_size=batch_size,
             n_groups=cfg.INPUT.N_REL_CLASSES - 1,
-            iterations_per_group=iterations_per_group,
+            samples_per_group=samples_per_group,
             num_batches=num_batches,
             start_batch=start_batch,
             strict_sampling=strict_sampling,
@@ -52,7 +52,7 @@ class KnowledgeGuidedRelationSampler(KnowledgeGuidedAbstractSampler):
             for rel_idx in torch.unique(relations):
                 if rel_idx.item() == 0:
                     continue
-                group_to_ids[rel_idx.item()].append(img_idx)
+                group_to_ids[rel_idx.item() - 1].append(img_idx)
 
         return group_to_ids
 

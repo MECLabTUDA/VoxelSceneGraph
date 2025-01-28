@@ -10,17 +10,19 @@ from scene_graph_prediction.structures import BoxList, BoxListOps
 from .build_layers import build_conv3x3
 from .misc import cat, ROIHeadName
 from ..abstractions.backbone import FeatureMaps, AnchorStrides
+from abc import ABC, abstractmethod
 
 
-class _LevelMapper:
+class LevelMapper(ABC):
+    @abstractmethod
+    def __call__(self, boxlists: list[BoxList]) -> torch.LongTensor:
+        raise NotImplementedError
+
+
+class _FPNLevelMapper(LevelMapper):
     """Determine which FPN level each RoI in a set of RoIs should map to, based on the heuristic in the FPN paper."""
 
-    def __init__(
-            self,
-            k_min: int,
-            k_max: int,
-            eps: float = 1e-6
-    ):
+    def __init__(self, k_min: int, k_max: int, eps: float = 1e-6):
         super().__init__()
         self.k_min = k_min
         self.k_max = k_max
@@ -37,9 +39,31 @@ class _LevelMapper:
         target_levels = (4 + torch.log2(areas + self.eps)).round().long() + 2  # +2 because P0 and P1 are not discarded
         target_levels = torch.clamp(target_levels, min=self.k_min, max=self.k_max)
         # Fix for using P5: https://github.com/MIC-DKFZ/medicaldetectiontoolkit/blob/master/models/ufrcnn.py#L404
-        target_levels[areas > 0.65] = 5
+        target_levels[areas > 0.65] = min(6, self.k_max)
 
+        # noinspection PyTypeChecker
         return target_levels
+
+
+class _AlwaysZeroLevelMapper(LevelMapper):
+    """Always select the level zero. Useful for the mask head when using a Retina UNet."""
+    def __call__(self, boxlists: list[BoxList]) -> torch.LongTensor:
+        # noinspection PyTypeChecker
+        return cat([torch.zeros(len(boxlist), dtype=torch.int64, device=boxlist.boxes.device) for boxlist in boxlists])
+
+
+class _AnchorLvlLevelMapper(LevelMapper):
+    """
+    Level mapper that uses the level at which the object was detected to select features.
+    It would be nice to have that for the box head when combined with a RetinaNet.
+    However, the ANCHOR_LVL gets discarded and since we're selecting some levels, we would need to remap the levels.
+    Also, not all RPNs can support this, and we have issues when adding GT boxes to the proposals
+    """
+
+    def __call__(self, boxlists: list[BoxList]) -> torch.LongTensor:
+        # +2 is only a fix for P0 and P1 not being discarded, but it doesn't work with all configs
+        # noinspection PyTypeChecker
+        return cat([boxlist.ANCHOR_LVL for boxlist in boxlists]).long() + 2  # +2 because P0 and P1 are not discarded
 
 
 class Pooler(torch.nn.Module, ABC):
@@ -58,9 +82,9 @@ class Pooler(torch.nn.Module, ABC):
             scales: Sequence[Sequence[float]],
             sampling_ratio: int,
             n_dim: int,
+            level_mapper: LevelMapper,
             in_channels: int = 512,  # Only used if cat_all_levels
             cat_all_levels: bool = False,
-            level_mapper=_LevelMapper(0, 6)
     ):
         """
         :param output_size: Output size for the pooled region.
@@ -108,7 +132,9 @@ class Pooler(torch.nn.Module, ABC):
         :param boxes: boxes to be used to perform the pooling operation.
         """
         rois = self._convert_to_roi_format(boxes)
-        assert rois.size(0) > 0
+        # Safeguard against empty boxes
+        if rois.size(0) == 0:
+            return torch.empty((0, x[0].shape[1]) + self.output_size, dtype=torch.float, device=x[0].device)
 
         num_levels = len(self.roi_align_samplers)
         if num_levels == 1:
@@ -162,11 +188,17 @@ class Pooler3D(Pooler):
         )
 
 
-def build_pooler(cfg: CfgNode, head_name: str | ROIHeadName, anchor_strides: AnchorStrides) -> Pooler:
+def build_pooler(
+        cfg: CfgNode,
+        head_name: str | ROIHeadName,
+        anchor_strides: AnchorStrides,
+        level_mapper_name: str = "FPNLevelMapper"
+) -> Pooler:
     """
     :param cfg: the config node.
     :param head_name: the head name needs to be one of ROIHeadName directly or a str.
     :param anchor_strides: Used to compute the scale for each level (scale = 1 / stride)
+    :param level_mapper_name: name of the LevelMapper class to use.
     """
     n_dim = cfg.INPUT.N_DIM
     assert n_dim in [2, 3]
@@ -178,18 +210,28 @@ def build_pooler(cfg: CfgNode, head_name: str | ROIHeadName, anchor_strides: Anc
     scales = [[1 / stride[dim] for dim in range(n_dim)] for stride in anchor_strides]
     sampling_ratio = cfg.MODEL[head_name].POOLER_SAMPLING_RATIO
 
+    match level_mapper_name:
+        case "FPNLevelMapper":
+            level_mapper = _FPNLevelMapper(0, 6)
+        case "AlwaysZero":
+            level_mapper = _AlwaysZeroLevelMapper()
+        case _:
+            raise NotImplementedError(f"LevelMapper {level_mapper_name} is not implemented.")
+
     if cfg.INPUT.N_DIM == 2:
         return Pooler2D(
             output_size=(resolution, resolution),
             scales=scales,
             sampling_ratio=sampling_ratio,
-            n_dim=n_dim
+            n_dim=n_dim,
+            level_mapper=level_mapper
         )
     return Pooler3D(
         output_size=(resolution_depth, resolution, resolution),
         scales=scales,
         sampling_ratio=sampling_ratio,
-        n_dim=cfg.INPUT.N_DIM
+        n_dim=cfg.INPUT.N_DIM,
+        level_mapper=level_mapper
     )
 
 
@@ -198,7 +240,8 @@ def build_pooler_extra_args(
         head_name: str | ROIHeadName,
         anchor_strides: AnchorStrides,
         in_channels: int,
-        cat_all_levels: bool
+        cat_all_levels: bool,
+        level_mapper_name: str = "FPNLevelMapper"
 ) -> Pooler:
     n_dim = cfg.INPUT.N_DIM
     assert n_dim in [2, 3]
@@ -211,6 +254,14 @@ def build_pooler_extra_args(
     scales = [[1 / stride[dim] for dim in range(n_dim)] for stride in anchor_strides]
     sampling_ratio = cfg.MODEL[head_name].POOLER_SAMPLING_RATIO
 
+    match level_mapper_name:
+        case "FPNLevelMapper":
+            level_mapper = _FPNLevelMapper(0, 6)
+        case "AlwaysZero":
+            level_mapper = _AlwaysZeroLevelMapper()
+        case _:
+            raise NotImplementedError(f"LevelMapper {level_mapper_name} is not implemented.")
+
     if cfg.INPUT.N_DIM == 2:
         return Pooler2D(
             output_size=(resolution, resolution),
@@ -218,7 +269,8 @@ def build_pooler_extra_args(
             sampling_ratio=sampling_ratio,
             in_channels=in_channels,
             cat_all_levels=cat_all_levels,
-            n_dim=cfg.INPUT.N_DIM
+            n_dim=n_dim,
+            level_mapper=level_mapper
         )
     return Pooler3D(
         output_size=(resolution_depth, resolution, resolution),
@@ -226,5 +278,6 @@ def build_pooler_extra_args(
         sampling_ratio=sampling_ratio,
         in_channels=in_channels,
         cat_all_levels=cat_all_levels,
-        n_dim=n_dim
+        n_dim=n_dim,
+        level_mapper=level_mapper
     )

@@ -22,6 +22,7 @@ import os
 from scene_graph_prediction.data.evaluation import EvaluationType, IouType
 from scene_graph_prediction.engine.training_script_blobs import build_training_basics, run_train, run_test, \
     prepare_basics
+from scene_graph_prediction.modeling.utils.misc import LossComputationCfg
 from scene_graph_prediction.utils.checkpoint import DetectronCheckpointer
 from scene_graph_prediction.utils.miscellaneous import save_config
 
@@ -41,8 +42,14 @@ def main():
 
     # Create checkpointer and load model
     checkpointer = DetectronCheckpointer(cfg, model, optimizer, scheduler, cfg.OUTPUT_DIR)
-    extra_checkpoint_data = checkpointer.load(cfg.MODEL.WEIGHT, update_schedule=cfg.SOLVER.UPDATE_SCHEDULE_DURING_LOAD)
-    arguments.update(extra_checkpoint_data)
+    if checkpointer.has_checkpoint():
+        extra_checkpoint_data = checkpointer.load(
+            None,
+            update_schedule=cfg.SOLVER.UPDATE_SCHEDULE_DURING_LOAD,
+        )
+        arguments.update(extra_checkpoint_data)
+    else:
+        checkpointer.load(cfg.MODEL.WEIGHT, with_optim=False)
 
     # Figure out what kind of evaluation we need to do
     evaluation_type = EvaluationType.COCO
@@ -60,6 +67,7 @@ def main():
         checkpointer,
         device,
         evaluation_type,
+        LossComputationCfg(True, True, False),
         args.distributed,
         logger
     )

@@ -91,3 +91,6 @@ class RPNModule(RPN[tuple[list[ImageAnchors], FeatureMapsObjectness, FeatureMaps
         anchors, objectness, rpn_box_regression = args
         loss_objectness, loss_rpn_box_reg = self.loss_evaluator(anchors, objectness, rpn_box_regression, targets)
         return {"loss_objectness": loss_objectness, "loss_rpn_box_reg": loss_rpn_box_reg}
+
+    def is_one_stage_detector(self) -> bool:
+        return False

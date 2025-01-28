@@ -18,7 +18,6 @@ from functools import reduce
 from typing import TypeVar, Sequence, Iterable, Hashable
 
 import torch
-from scipy.linalg import block_diag
 
 from scene_graph_api.utils.tensor import affine_transformation_grid, compute_bounding_box
 from .box_list_field_extractor import FieldExtractor
@@ -222,6 +221,7 @@ class BoxListOps:
     @staticmethod
     def centers(boxlist: BoxListBase) -> torch.Tensor:
         """Compute the zyx center point of the boxes."""
+        boxlist = boxlist.convert(boxlist.Mode.zyxzyx)
         center_points = [
             (boxlist.boxes[:, dim] + boxlist.boxes[:, dim + boxlist.n_dim]) / 2
             for dim in range(boxlist.n_dim)
@@ -412,6 +412,9 @@ class BoxListOps:
         fields = set(boxlists[0].fields())
         assert all(set(bbox.fields()) == fields for bbox in boxlists)
 
+        if len(boxlists) == 1:
+            return boxlists[0].copy_with_all_fields()
+
         # Cat bounding boxes
         cat_boxes = BoxList(torch.cat([bbox.boxes for bbox in boxlists], dim=0), size, mode)
 
@@ -424,11 +427,18 @@ class BoxListOps:
                 data = boxlists[0].get_field(field)
             elif indexing_power == 1:
                 # Indexing power 1
-                data = torch.cat([bbox.get_field(field) for bbox in boxlists], dim=0)
+                kind_of_field = boxlists[0].get_field(field)
+                if isinstance(kind_of_field, AbstractMaskList):
+                    # Special case where a field with indexing power can be an AbstractMaskList
+                    # Note: typically the MASKS and PRED_MASKS fields
+                    data = kind_of_field.cat([bbox.get_field(field) for bbox in boxlists])
+                else:
+                    data = torch.cat([bbox.get_field(field) for bbox in boxlists], dim=0)
             else:
                 # Indexing power 2
-                matrix_list = [bbox.get_field(field).numpy() for bbox in boxlists]
-                data = torch.from_numpy(block_diag(*matrix_list))
+                matrix_list = [bbox.get_field(field) for bbox in boxlists]
+                data = torch.block_diag(*matrix_list)
+
             cat_boxes.add_field(field, data, indexing_power=indexing_power)
 
         return cat_boxes
