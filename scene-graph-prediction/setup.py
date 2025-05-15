@@ -91,7 +91,7 @@ setup(
             "sgpred_boxlist_prediction_to_slicer_rois = tools.boxlist_prediction_to_slicer_rois:main",
             "sgpred_detector_offline_eval = tools.detector_offline_eval:main",
             "sgpred_detector_detector_one_stage_box_feature_extractor_pretrain_net = "
-            "tools.detector_one_stage_box_feature_extractor_pretrain_net:main",
+            "sgpred_detector_one_stage_box_feature_extractor_pretrain_net:main",
             "sgpred_detector_pretrain_net = tools.detector_pretrain_net:main",
             "sgpred_relation_train_net = tools.relation_train_net:main",
             "sgpred_test_net = tools.test_net:main",
