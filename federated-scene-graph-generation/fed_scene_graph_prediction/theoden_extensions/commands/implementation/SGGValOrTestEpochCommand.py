@@ -1,3 +1,5 @@
+from typing import Sequence
+
 from scene_graph_prediction.engine.training_script_blobs import run_test, run_val
 from scene_graph_prediction.modeling.utils.misc import LossComputationCfg
 from scene_graph_prediction.scheduling.lr_scheduler import MetricsAwareScheduler
@@ -25,13 +27,16 @@ class SGGValOrTestEpochCommand(ValidateEpochCommand, implements=ValidateEpochCom
             False,
             self.client_rm["logger"]
         )
-        flat_metrics = {
-            f"{iou_type.value}_{class_name}_{metric_name}": value
-            for dataset_name, all_metrics in metrics.items()
-            for iou_type, all_metrics in all_metrics.items()
-            for class_name, metric_dict in all_metrics.items()
-            for metric_name, value in metric_dict.items()
-        }
+        flat_metrics = {}
+        for dataset_name, all_metrics in metrics.items():
+            for iou_type, all_metrics in all_metrics.items():
+                for class_name, metric_dict in all_metrics.items():
+                    for metric_name, value in metric_dict.items():
+                        if isinstance(value, Sequence):
+                            for idx, vv in enumerate(value):
+                                flat_metrics[f"{iou_type.value}_{class_name}_{metric_name}{idx}"] = vv
+                        else:
+                            flat_metrics[f"{iou_type.value}_{class_name}_{metric_name}"] = value
         flat_metrics.update(losses)
 
         iteration = self.client_rm["arguments"]["iteration"]
