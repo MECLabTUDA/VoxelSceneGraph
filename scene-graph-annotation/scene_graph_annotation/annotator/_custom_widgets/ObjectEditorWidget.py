@@ -79,7 +79,7 @@ class ObjectEditorWidget(QWidget):
         layout.addRow(QLabel(f"Size {coord_format}:"), QLabel(coord_formatted))
 
         # Attribute rows
-        for attr_class in sorted(self._object_class.attributes, key=lambda a: a.name):
+        for attr_class in self._object_class.attributes:
             attr = self._object.get_attribute_by_id(attr_class.id)
 
             # Init the value widget for each possible attribute type
