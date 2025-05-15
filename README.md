@@ -21,7 +21,7 @@ It includes Scene Graphs for 574 volumes from five open source datasets.
 (decision on 18th of Sep. 2025). 
 Until then, we'll do our best to have everything to document all our code/tools.
 
-![figure2.png](images/figure2.png)
+![sg_example.png](images/sg_example.png)
 
 ## Our Accepted Papers
 
