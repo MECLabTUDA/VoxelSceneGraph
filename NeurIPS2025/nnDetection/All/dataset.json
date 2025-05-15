@@ -1,0 +1,15 @@
+{
+  "task": "TASK0005_All",
+  "name": "All",
+  "dim": 3,
+  "test_labels": false,
+  "modalities": {
+    "0": "CT"
+  },
+  "labels": {
+    "0": "ventricles",
+    "1": "midline",
+    "2": "ICH"
+  },
+  "file_ending": ".nii.gz"
+}

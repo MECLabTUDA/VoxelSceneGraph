@@ -12,7 +12,7 @@ using Federated Learning
 Made with love by our colleagues ❤️
 - `3d-slicer-modules`: any custom module we design for 3D Slicer, currently only to make the segmentation of cohorts easier
 - `scene-graph-annotation`: tool for Voxel Scene Graph annotation and more
-- `documentation`: guides, tutorials or instructions to reproduce our results (WIP)
+- `NeurIPS2025`: instructions to reproduce our NeurIPS2025 results
 
 Our **Scene Graph annotation is openly available** on [Kaggle](https://www.kaggle.com/datasets/sannera/bleedscene3d).
 It includes Scene Graphs for 574 volumes from five open source datasets.

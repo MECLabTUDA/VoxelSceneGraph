@@ -1,0 +1,13 @@
+{
+  "channel_names": {
+    "0": "CT"
+  },
+  "labels": {
+    "background": 0,
+    "ventricles": 1,
+    "midline": 2,
+    "ICH": 3
+  },
+  "numTraining": 61,
+  "file_ending": ".nii.gz"
+}
