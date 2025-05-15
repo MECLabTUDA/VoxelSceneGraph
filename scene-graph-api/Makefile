@@ -1,14 +1,11 @@
 all:
-    # Install pycocotools locally
-	python setup.py build_ext --inplace
-	rm -rf build
+    # Install scene_graph_api locally
+	python setup.py
 
 interactive:
-    # Install pycocotools as an interactive framework
+    # Install scene_graph_api as an interactive framework
 	pip install -e .
-	rm -rf build
 
 install:
-    # Install pycocotools to the Python site-packages
+    # Install scene_graph_api to the Python site-packages
 	python -m pip install .
-	rm -rf build
