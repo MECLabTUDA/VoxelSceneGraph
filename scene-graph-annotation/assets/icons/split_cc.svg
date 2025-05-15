@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+        version="1.1"
+        id="svg843"
+        width="512"
+        height="512"
+        viewBox="0 0 512 512"
+        sodipodi:docname="split_cc.svg"
+        inkscape:version="1.1.2 (b8e25be833, 2022-02-05)"
+        inkscape:export-filename="C:\Users\Antoine\PycharmProjects\scene-graph-annotation\assets\icons\split_cc.png"
+        inkscape:export-xdpi="500"
+        inkscape:export-ydpi="500"
+        xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+        xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+        xmlns="http://www.w3.org/2000/svg"
+>
+    <defs
+            id="defs847">
+        <rect
+                x="100.51894"
+                y="149.89667"
+                width="122.85649"
+                height="89.938002"
+                id="rect4263"/>
+    </defs>
+    <sodipodi:namedview
+            id="namedview845"
+            pagecolor="#ffffff"
+            bordercolor="#999999"
+            borderopacity="1"
+            inkscape:pageshadow="0"
+            inkscape:pageopacity="0"
+            inkscape:pagecheckerboard="0"
+            showgrid="false"
+            inkscape:zoom="1.2029102"
+            inkscape:cx="188.70902"
+            inkscape:cy="292.62367"
+            inkscape:window-width="1920"
+            inkscape:window-height="1057"
+            inkscape:window-x="-8"
+            inkscape:window-y="-8"
+            inkscape:window-maximized="1"
+            inkscape:current-layer="g849"/>
+    <g
+            inkscape:groupmode="layer"
+            inkscape:label="Image"
+            id="g849">
+        <text
+                xml:space="preserve"
+                id="text4261"
+                style="font-size:10.6667px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;white-space:pre;shape-inside:url(#rect4263);fill:#191919;fill-opacity:1;stroke:none;stroke-width:0.141208;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+                transform="matrix(42.648022,0,0,42.648092,-4306.062,-6387.3008)"
+                inkscape:export-filename="C:\Users\Antoine\PycharmProjects\scene-graph-annotation\assets\icons\split_cc.png"
+                inkscape:export-xdpi="500"
+                inkscape:export-ydpi="500"><tspan
+         x="100.51953"
+         y="159.50456"
+         id="tspan1057"><tspan
+           style="font-weight:600;font-family:'Segoe UI';-inkscape-font-specification:'Segoe UI Semi-Bold'"
+           id="tspan1055">CC</tspan></tspan></text>
+    </g>
+</svg>

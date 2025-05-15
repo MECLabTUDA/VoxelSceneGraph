@@ -1,0 +1,30 @@
+numpy
+matplotlib
+# Note: PyQt with ubuntu also requires libraries: libxcb-util-dev, libxcb-xinerama0, libxcb-cursor0
+PyQt6
+nibabel
+scipy
+scikit-image
+pillow
+connected-components-3d
+opencv-python
+SimpleITK
+lru-dict
+click
+click-logging
+tqdm
+# For plotting directed graphs
+networkx
+pyvis
+# For rendering directed graphs in PyQt6
+# Note: this engine is Chromium-based
+# Note: may need to manually run:
+#        pip install --upgrade PyQt6-WebEngine-qt6
+#        pip install --upgrade PyQt6-WebEngine
+#        pip install --upgrade PyQt6
+#        pip install --upgrade PyQt6-sip
+# Note for developpers: using a WebEngineView in a window will switch the render engine to OpenGL
+#                       so if you're adding your engine dynamically, make sure to laod a dummy one before any show()
+# https://doc.qt.io/qt-6/qtwebengine-webenginewidgets-simplebrowser-example.html#creating-the-browser-main-window
+PyQt6-WebEngine-qt6
+PyQt6-WebEngine
