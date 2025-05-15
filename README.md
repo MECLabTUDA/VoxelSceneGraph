@@ -8,10 +8,20 @@ the future. Anyway here is an overview of the repository that you can find here:
 - `scene-graph-prediction`: framework for Voxel Scene Graph applications
 - `federated-scene-graph-prediction`: framework for Voxel Scene Graph applications trained 
 using Federated Learning
-- `theoden`: our fork of `TheODen` [framework](https://github.com/MECLabTUDA/TheODen) for Federated Learning.
+- `theoden`: our fork of `TheODen` [framework](https://github.com/MECLabTUDA/TheODen) for Federated Learning
 Made with love by our colleagues ❤️
-- `scene-graph-annotation`: tool for Voxel Scene Graph annotation and much more (TBA) 😉
-- `scene-graph-data`: instructions for downloading our datasets (TBA) 😉
+- `3d-slicer-modules`: any custom module we design for 3D Slicer, currently only to make the segmentation of cohorts easier
+- `scene-graph-annotation`: tool for Voxel Scene Graph annotation and more
+- `documentation`: guides, tutorials or instructions to reproduce our results (WIP)
+
+Our **Scene Graph annotation is openly available** on [Kaggle](https://www.kaggle.com/datasets/sannera/bleedscene3d).
+It includes Scene Graphs for 574 volumes from five open source datasets.
+
+**Note:** our dataset submission is under review at NeurIPS2025. We'll make the Kaggle dataset public upon acceptance
+(decision on 18th of Sep. 2025). 
+Until then, we'll do our best to have everything to document all our code/tools.
+
+![figure2.png](images/figure2.png)
 
 ## Our Accepted Papers
 
