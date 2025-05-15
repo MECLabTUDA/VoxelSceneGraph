@@ -16,18 +16,11 @@ class DatasetCatalog:
     CACHE_DIR = os.path.join(DATASETS_DIR, ".cache")
 
     DATASETS = {
-        "INST2022": {
+        "INSTANCE2022": {
             "img_dir": DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/images",
             "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/boxlists",
             "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
             "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/split.json"),
-            _DATASET_TYPE_KEY: RelationDetectionDataset
-        },
-        "MZ": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/MZ/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/MZ/boxlists",
-            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/MZ/split.json"),
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "BHSD": {
@@ -45,10 +38,10 @@ class DatasetCatalog:
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "PhysioNet": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/Iraq/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/Iraq/boxlists",
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/PhysioNet/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/PhysioNet/boxlists",
             "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/Iraq/split.json"),
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/PhysioNet/split.json"),
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "HemSeg200": {
@@ -59,19 +52,12 @@ class DatasetCatalog:
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
 
-        "INST_rel": {
+        "INSTANCE2022_rel": {
             "img_dir": DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/images",
             "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/boxlists",
             "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
             "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/split.json"),
             "keep_only_with_rel": True,
-            _DATASET_TYPE_KEY: RelationDetectionDataset
-        },
-        "MZ_rel": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/MZ/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/MZ/boxlists",
-            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/MZ/split.json"),
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "BHSD_rel": {
@@ -91,10 +77,10 @@ class DatasetCatalog:
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "PhysioNet_rel": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/Iraq/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/Iraq/boxlists",
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/PhysioNet/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/PhysioNet/boxlists",
             "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/Iraq/split.json"),
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/PhysioNet/split.json"),
             "keep_only_with_rel": True,
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
