@@ -76,7 +76,7 @@ class Study:
     last_segment_can_repeat: bool
     progress: dict[str, AnnotationProgress]
     window_width: int | None = None
-    window_length: int | None = None
+    window_center: int | None = None
 
     def dict(self) -> dict:
         ret = {
@@ -87,7 +87,7 @@ class Study:
             "segments": ",".join(self.segments),
             "last_segment_can_repeat": self.last_segment_can_repeat,
             "window_width": self.window_width,
-            "window_length": self.window_length
+            "window_center": self.window_center
         }
         if self.id is not None:
             ret["id"] = self.id
@@ -105,5 +105,5 @@ class Study:
             # {k: AnnotationProgress.from_dict(prog) for k, prog in data["progress"].items()},
             {},
             data.get("window_width"),
-            data.get("window_length")
+            data.get("window_center")
         )

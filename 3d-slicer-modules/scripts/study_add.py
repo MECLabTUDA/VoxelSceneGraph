@@ -23,10 +23,10 @@ from annotation_database.structures import Study
 @click.option("-l", "--label-folder", type=click.Path(path_type=Path),
               required=True, help="Relative path to the label folder from the database path.")
 @click.option("-s", "--segments", type=str, multiple=True, required=True, help="List of segment names.")
-@click.option("-r", "--last_segment_can_repeat", type=bool,
+@click.option("-r", "--last-segment-can-repeat", type=bool,
               is_flag=True, default=False, help="Whether the last segment can repeat.")
 @click.option("--window-width", type=int, required=False, default=None, help="Window width for display.")
-@click.option("--window-length", type=int, required=False, default=None, help="Window length for display.")
+@click.option("--window-center", type=int, required=False, default=None, help="Window center for display.")
 def main(
         db_string: Path,
         name: str,
@@ -35,7 +35,7 @@ def main(
         segments: list[str],
         last_segment_can_repeat: bool,
         window_width: int | None,
-        window_length: int | None
+        window_center: int | None
 ) -> int:
     logger = getLogger(__file__)
     click_logging.basic_config(logger)
@@ -58,7 +58,7 @@ def main(
         last_segment_can_repeat=last_segment_can_repeat,
         progress={},
         window_width=window_width,
-        window_length=window_length
+        window_center=window_center
     )
     study_add(study)
 

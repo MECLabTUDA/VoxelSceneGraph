@@ -190,8 +190,6 @@ class AnnotationOverviewWidget(ScriptedLoadableModuleWidget, VTKObservationMixin
         self._last_selected_study_index = 0  # We need to maintain an index to be able to cancel study selections
         self._selected_patient_name = ""
         self._selected_patient_modified = False
-        self._current_windowing_index = 0
-        self._windows = [(0, 100), (20, 60)]
 
         self._setting_patient_nodes = False  # Flag to avoid feedback loop
         self._cancel_patient_selection = False  # Flag to avoid feedback loop
@@ -378,7 +376,6 @@ class AnnotationOverviewWidget(ScriptedLoadableModuleWidget, VTKObservationMixin
         self._selected_patient_name = ""
         # Whether to ignore the next patient selection trigger (because we did some internal update)
         self._cancel_patient_selection = False
-        self._current_windowing_index = 0
 
         # We actually don't need to update the model
         # because we can keep the table as is, even if some loaded nodes are deleted
@@ -567,12 +564,11 @@ class AnnotationOverviewWidget(ScriptedLoadableModuleWidget, VTKObservationMixin
         self._process_node_pair()
 
         # Set window width / length if specified
-        if selected_study.window_width is not None and selected_study.window_length is not None:
-            # min_v = selected_study.window_length - selected_study.window_width / 2
-            # max_v = selected_study.window_length + selected_study.window_width / 2
+        if selected_study.window_width is not None and selected_study.window_center is not None:
+            min_v = selected_study.window_center - selected_study.window_width / 2
+            max_v = selected_study.window_center + selected_study.window_width / 2
             vol_node.GetDisplayNode().SetAutoWindowLevel(False)
-            # vol_node.GetDisplayNode().SetWindowLevelMinMax(min_v, max_v)
-            vol_node.GetDisplayNode().SetWindowLevelMinMax(self._windows[0][0], self._windows[0][1])
+            vol_node.GetDisplayNode().SetWindowLevelMinMax(min_v, max_v)
 
         # Change selected node for other modules
         self._segment_editor.self().editor.setSegmentationNode(seg_node)
@@ -855,14 +851,6 @@ class AnnotationOverviewWidget(ScriptedLoadableModuleWidget, VTKObservationMixin
         if segment_ids.GetNumberOfValues() > 0:
             self._segment_editor.self().editor.setCurrentSegmentID(segment_ids.GetValue(0))
 
-    def _change_windowing(self):
-        if self._parameter_node is None or self._parameter_node.volume is None:
-            return
-        self._current_windowing_index = (self._current_windowing_index + 1) % len(self._windows)
-        self._parameter_node.volume.GetDisplayNode().SetWindowLevelMinMax(
-            self._windows[self._current_windowing_index][0], self._windows[self._current_windowing_index][1]
-        )
-
     def _install_keyboard_shortcuts(self):
         """Install some additional keybind shortcuts. These are always active when the module is open."""
         if not self._shortcuts:
@@ -877,12 +865,6 @@ class AnnotationOverviewWidget(ScriptedLoadableModuleWidget, VTKObservationMixin
             next_patient_shortcut.setKey(qt.QKeySequence("r"))
             next_patient_shortcut.connect("activated()", lambda: self._select_patient_relative_to_current(1))
             self._shortcuts.append(next_patient_shortcut)
-
-            # Switch the value windowing for the volume
-            switch_windowing_shortcut = qt.QShortcut(self.parent)
-            switch_windowing_shortcut.setKey(qt.QKeySequence("v"))
-            switch_windowing_shortcut.connect("activated()", self._change_windowing)
-            self._shortcuts.append(switch_windowing_shortcut)
 
             # Select segment under the cursor
             select_segment_cursor_shortcut = qt.QShortcut(self.parent)

@@ -25,9 +25,9 @@ def init_tables():
             segments text NOT NULL,
             last_segment_can_repeat boolean NOT NULL,
             window_width integer,
-            window_length integer
-                CHECK((window_width IS NULL and window_length IS NULL) OR 
-                      (window_width IS NOT NULL and window_length IS NOT NULL))
+            window_center integer
+                CHECK((window_width IS NULL and window_center IS NULL) OR 
+                      (window_width IS NOT NULL and window_center IS NOT NULL))
         );
         CREATE TABLE IF NOT EXISTS {PROGRESS_TABLE} (
             study_id integer,
