@@ -27,8 +27,8 @@ from scene_graph_api.utils.parsing import get_validator
 
 
 # noinspection DuplicatedCode
-class TestObjectAttribute(TestCase):
-    logger = logging.getLogger("scene/ObjectAttribute")
+class TestAttribute(TestCase):
+    logger = logging.getLogger("scene/Attribute")
     handler = TestingHandler()
     # Define knowledge for some tests
     parent_object_class_id = 1
@@ -44,7 +44,7 @@ class TestObjectAttribute(TestCase):
                     template_enum_attr]
     )
     template = NaturalImageKG([template_obj])
-    validator = get_validator(ObjectAttribute.schema(), registry=SceneGraphComponent.SCHEMA_REGISTRY)
+    validator = get_validator(Attribute.schema(), registry=SceneGraphComponent.SCHEMA_REGISTRY)
 
     @classmethod
     def setUpClass(cls):
@@ -54,19 +54,19 @@ class TestObjectAttribute(TestCase):
         self.handler.purge()
 
     def test_from_json_valid(self):
-        json_dict = {ObjectAttribute._id_key: 2, ObjectAttribute._value_key: "val"}
+        json_dict = {Attribute._id_key: 2, Attribute._value_key: "val"}
         self.assertEqual(0, len(list(self.validator.iter_errors(json_dict))))
-        res = ObjectAttribute.from_json(json_dict)
+        res = Attribute.from_json(json_dict)
         self.assertIsNotNone(res)
         self.assertEqual(2, res.id)
         self.assertEqual("val", res.value)
 
     def test_from_json_no_id(self):
-        json_dict = {ObjectAttribute._value_key: "val"}
+        json_dict = {Attribute._value_key: "val"}
         self.assertEqual(1, len(list(self.validator.iter_errors(json_dict))))
 
     def test_from_json_no_value(self):
-        json_dict = {ObjectAttribute._id_key: 2}
+        json_dict = {Attribute._id_key: 2}
         self.assertEqual(1, len(list(self.validator.iter_errors(json_dict))))
 
     def test_from_json_empty(self):
@@ -74,7 +74,7 @@ class TestObjectAttribute(TestCase):
         self.assertEqual(2, len(list(self.validator.iter_errors(json_dict))))
 
     def _test_validate_type_and_value_type_found(self, attr_id: int, value: Any):
-        attr = ObjectAttribute(attr_id, value)
+        attr = Attribute(attr_id, value)
         success = attr.validate_type_and_value(self.template_obj, self.logger)
         self.assertTrue(success)
         self.assertEqual(0, self.handler.get_warning_message_count())
@@ -90,7 +90,7 @@ class TestObjectAttribute(TestCase):
         self._test_validate_type_and_value_type_found(self.template_float_attr.id, 1.)
 
     def test_validate_type_and_value_type_unknown_type(self):
-        attr = ObjectAttribute(42, "")
+        attr = Attribute(42, "")
         success = attr.validate_type_and_value(self.template_obj, self.logger)
         self.assertFalse(success)
         self.assertEqual(0, self.handler.get_warning_message_count())
@@ -101,14 +101,14 @@ class TestObjectAttribute(TestCase):
 
     def test_validate_type_and_value_type_str_value_not_str(self):
         # Cast to str never fails
-        attr = ObjectAttribute(self.template_str_attr.id, 1)
+        attr = Attribute(self.template_str_attr.id, 1)
         success = attr.validate_type_and_value(self.template_obj, self.logger)
         self.assertTrue(success)
         self.assertEqual(0, self.handler.get_warning_message_count())
         self.assertEqual(0, self.handler.get_error_message_count())
 
     def test_validate_type_and_value_type_int_value_not_int_invalid(self):
-        attr = ObjectAttribute(self.template_int_attr.id, "sdf")
+        attr = Attribute(self.template_int_attr.id, "sdf")
         success = attr.validate_type_and_value(self.template_obj, self.logger)
         self.assertFalse(success)
         self.assertEqual(1, self.handler.get_warning_message_count())
@@ -116,42 +116,42 @@ class TestObjectAttribute(TestCase):
 
     def test_validate_type_and_value_type_int_value_not_int_valid(self):
         # Cast to str never fails
-        attr = ObjectAttribute(self.template_int_attr.id, 1.)
+        attr = Attribute(self.template_int_attr.id, 1.)
         success = attr.validate_type_and_value(self.template_obj, self.logger)
         self.assertTrue(success)
         self.assertEqual(1, self.handler.get_warning_message_count())
         self.assertEqual(0, self.handler.get_error_message_count())
 
     def test_validate_type_and_value_type_float_value_not_float_invalid(self):
-        attr = ObjectAttribute(self.template_int_attr.id, "sdf")
+        attr = Attribute(self.template_int_attr.id, "sdf")
         success = attr.validate_type_and_value(self.template_obj, self.logger)
         self.assertFalse(success)
         self.assertEqual(1, self.handler.get_warning_message_count())
         self.assertEqual(1, self.handler.get_error_message_count())
 
     def test_validate_type_and_value_type_float_value_not_float_valid(self):
-        attr = ObjectAttribute(self.template_float_attr.id, "1.")
+        attr = Attribute(self.template_float_attr.id, "1.")
         success = attr.validate_type_and_value(self.template_obj, self.logger)
         self.assertTrue(success)
         self.assertEqual(0, self.handler.get_warning_message_count())
         self.assertEqual(0, self.handler.get_error_message_count())
 
     def test_validate_type_and_value_type_enum_value_invalid(self):
-        attr = ObjectAttribute(self.template_enum_attr.id, "sdf")
+        attr = Attribute(self.template_enum_attr.id, "sdf")
         success = attr.validate_type_and_value(self.template_obj, self.logger)
         self.assertFalse(success)
         self.assertEqual(0, self.handler.get_warning_message_count())
         self.assertEqual(1, self.handler.get_error_message_count())
 
     def test_validate_type_and_value_type_enum_value_valid(self):
-        attr = ObjectAttribute(self.template_enum_attr.id, self.template_enum_attr.values[0])
+        attr = Attribute(self.template_enum_attr.id, self.template_enum_attr.values[0])
         success = attr.validate_type_and_value(self.template_obj, self.logger)
         self.assertTrue(success)
         self.assertEqual(0, self.handler.get_warning_message_count())
         self.assertEqual(0, self.handler.get_error_message_count())
 
     def test_to_json(self):
-        attr = ObjectAttribute(42, "val")
+        attr = Attribute(42, "val")
         json_dict = attr.to_json()
-        self.assertEqual(attr.id, json_dict[ObjectAttribute._id_key])
-        self.assertEqual(attr.value, json_dict[ObjectAttribute._value_key])
+        self.assertEqual(attr.id, json_dict[Attribute._id_key])
+        self.assertEqual(attr.value, json_dict[Attribute._value_key])

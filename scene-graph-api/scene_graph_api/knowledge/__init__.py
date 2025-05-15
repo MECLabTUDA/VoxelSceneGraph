@@ -14,8 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+from .Attribute import StrAttribute, IntAttribute, FloatAttribute, BoolAttribute, EnumAttribute
 from .ClassFilter import WhitelistFilter, BlacklistFilter
+from .Keypoint import Keypoint
 from .KnowledgeGraph import KnowledgeGraph, RadiologyImageKG, NaturalImageKG
-from .ObjectAttribute import StrAttribute, IntAttribute, FloatAttribute, BoolAttribute, EnumAttribute
 from .ObjectClass import ObjectClass
 from .RelationRule import RelationRule

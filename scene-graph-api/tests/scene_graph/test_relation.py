@@ -38,11 +38,11 @@ class TestRelation(TestCase):
         [RelationRule(rel_id, "rule", WhitelistFilter([object_class_id1]), WhitelistFilter([object_class_id2]))]
     )
     # Define object instances
-    obj1_cls1 = BoundingBox(object_class_id1, 1, "", [], [[], []])
-    obj2_cls1 = BoundingBox(object_class_id1, 2, "", [], [[], []])
-    obj3_cls2 = BoundingBox(object_class_id2, 3, "", [], [[], []])
+    obj1_cls1 = BoundingBox(object_class_id1, 1, "", [[], []])
+    obj2_cls1 = BoundingBox(object_class_id1, 2, "", [[], []])
+    obj3_cls2 = BoundingBox(object_class_id2, 3, "", [[], []])
     known_objs = [obj1_cls1, obj2_cls1, obj3_cls2]
-    unknown_obj = BoundingBox(object_class_id1, 4, "", [], [[], []])
+    unknown_obj = BoundingBox(object_class_id1, 4, "", [[], []])
     validator = get_validator(Relation.schema(), registry=SceneGraphComponent.SCHEMA_REGISTRY)
 
     @classmethod

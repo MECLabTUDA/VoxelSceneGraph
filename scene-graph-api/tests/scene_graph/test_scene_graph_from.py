@@ -25,7 +25,7 @@ import numpy as np
 
 from scene_graph_api.knowledge import ObjectClass, RelationRule, WhitelistFilter, IntAttribute, NaturalImageKG
 from scene_graph_api.logging_handlers import TestingHandler
-from scene_graph_api.scene import Relation, SceneGraph, BoundingBox, ObjectAttribute
+from scene_graph_api.scene import Relation, SceneGraph, BoundingBox, Attribute
 from scene_graph_api.utils.nifti_io import NiftiImageWrapper
 
 
@@ -49,8 +49,10 @@ class TestSceneGraph(TestCase):
             ObjectClass(ignored_class_id, has_mask=True, is_ignored=True),
         ],
         [RelationRule(rel_id, "rule", WhitelistFilter([bb_class_id]), WhitelistFilter([bb_class_id]))],
-        [],
-        template_hash
+        [], [],
+        [], [],
+        [], [],
+        hash_=template_hash
     )
 
     template_with_il_attr = NaturalImageKG(
@@ -61,13 +63,15 @@ class TestSceneGraph(TestCase):
             ObjectClass(ignored_class_id, has_mask=True, is_ignored=True),
         ],
         [RelationRule(rel_id, "rule", WhitelistFilter([bb_class_id]), WhitelistFilter([bb_class_id]))],
-        [IntAttribute(1, "a")],
-        template_hash
+        [IntAttribute(1, "a")], [],
+        [], [],
+        [], [],
+        hash_=template_hash
     )
 
     # Define object instances
-    bb = BoundingBox(bb_class_id, 2, "", [ObjectAttribute(1, "Attr")], [[1, 2], [3, 4]])
-    seg = BoundingBox(seg_class_id, 3, "", [], [[1, 2], [3, 4]])
+    bb = BoundingBox(bb_class_id, 2, "", [[1, 2], [3, 4]], attributes=[Attribute(1, "Attr")])
+    seg = BoundingBox(seg_class_id, 3, "", [[1, 2], [3, 4]])
     rel = Relation(rel_id, bb.id, bb.id)
     labelmap = np.array([[0, seg.id]])
     affine = np.eye(4)
@@ -81,7 +85,7 @@ class TestSceneGraph(TestCase):
         self.handler.purge()
 
     def test_create_from_labelmap_not_contiguous(self):
-        # Check that attributes are init as the ObjectAttribute objects and not just the value
+        # Check that attributes are init as the Attribute objects and not just the value
         # noinspection DuplicatedCode
         arr = np.array(
             [[[1, 0, 3],
@@ -99,7 +103,7 @@ class TestSceneGraph(TestCase):
         self.assertTrue(res.validate(self.logger))
 
     def test_create_from_segmentation_check_attributes_init(self):
-        # Check that attributes are init as the ObjectAttribute objects and not just the value
+        # Check that attributes are init as the Attribute objects and not just the value
         # noinspection DuplicatedCode
         arr = np.array(
             [[[self.bb_class_id, 0, self.bb_class_id],
@@ -111,12 +115,12 @@ class TestSceneGraph(TestCase):
         self.assertIsNotNone(res)
         for bb in res.bounding_boxes_by_class_id[self.bb_class_id]:
             self.assertEqual(1, len(bb.attributes))
-            self.assertTrue(isinstance(bb.attributes[0], ObjectAttribute))
+            self.assertTrue(isinstance(bb.attributes[0], Attribute))
         self.assertEqual(4, len(list(res.iter_bounding_boxes())))
         self.assertTrue(res.validate(self.logger))
 
     def test_create_from_segmentation_check_image_level_attributes_init(self):
-        # Check that attributes are init as the ObjectAttribute objects and not just the value
+        # Check that attributes are init as the Attribute objects and not just the value
         # noinspection DuplicatedCode
         arr = np.array(
             [[[self.bb_class_id, 0, self.bb_class_id],
@@ -129,7 +133,7 @@ class TestSceneGraph(TestCase):
         self.assertTrue(res.validate(self.logger))
 
     def test_create_from_segmentation_check_unique_class(self):
-        # Check that attributes are init as the ObjectAttribute objects and not just the value
+        # Check that attributes are init as the Attribute objects and not just the value
         arr = np.array(
             [[[self.unique_class_id, 0, self.unique_class_id],
               [0, 0, 0]]],
@@ -142,7 +146,7 @@ class TestSceneGraph(TestCase):
         self.assertTrue(res.validate(self.logger))
 
     def test_create_from_segmentation_check_ignored_class(self):
-        # Check that attributes are init as the ObjectAttribute objects and not just the value
+        # Check that attributes are init as the Attribute objects and not just the value
         arr = np.array(
             [[[self.bb_class_id, self.ignored_class_id, self.bb_class_id],
               [self.seg_class_id, self.ignored_class_id, self.seg_class_id]]],
@@ -155,7 +159,7 @@ class TestSceneGraph(TestCase):
         self.assertTrue(res.validate(self.logger))
 
     def test_create_from_segmentation_save_load(self):
-        # Check that attributes are init as the ObjectAttribute objects and not just the value
+        # Check that attributes are init as the Attribute objects and not just the value
         # noinspection DuplicatedCode
         arr = np.array([[[self.bb_class_id, 0, self.bb_class_id],
                          [self.seg_class_id, 0, self.seg_class_id]]], dtype=np.uint8).reshape((1, 2, 3))

@@ -22,8 +22,9 @@ from logging import Logger
 import numpy as np
 from typing_extensions import Self
 
+from .Attribute import Attribute
+from .Keypoint import Keypoint
 from .KnowledgeComponent import KnowledgeComponent
-from .ObjectAttribute import ObjectAttribute
 from ..utils.parsing import *
 
 
@@ -48,7 +49,7 @@ def _id_to_hex_color(some_id: int) -> str:
 
 class ObjectClass(KnowledgeComponent):
     """
-    Component defining the label id, name, attributes... of a target object class.
+    Component defining the label id, name, attributes, keypoints... of a target object class.
     An object class can either be of a segmented object or of a bounding box obtained from a coarse segmentation.
 
     Optionally, one can use the "is_unique" flag to state that
@@ -66,6 +67,7 @@ class ObjectClass(KnowledgeComponent):
     _id_key = "id"
     _name_key = "name"
     _attributes_key = "attributes"
+    _keypoints_key = "keypoints"
     _has_mask_key = "has_mask"
     _is_ignored_key = "is_ignored"
     _is_unique_key = "is_unique"
@@ -75,7 +77,8 @@ class ObjectClass(KnowledgeComponent):
             self,
             class_id: int,
             name: str = "",
-            attributes: list[ObjectAttribute] | None = None,
+            attributes: list[Attribute] | None = None,
+            keypoints: list[Keypoint] | None = None,
             has_mask: bool = False,
             is_unique: bool = False,
             is_ignored: bool = False,
@@ -84,6 +87,7 @@ class ObjectClass(KnowledgeComponent):
         self.id = class_id
         self.name = name
         self.attributes = attributes if attributes is not None else []
+        self.keypoints = keypoints if keypoints is not None else []
         self.has_mask = has_mask
         self.is_unique = is_unique
         self.is_ignored = is_ignored
@@ -97,12 +101,14 @@ class ObjectClass(KnowledgeComponent):
         is_unique = json_dict.get(cls._is_unique_key, False)
         is_ignored = json_dict.get(cls._is_ignored_key, False)
         color = json_dict.get(cls._color_key)
-        attributes = [ObjectAttribute.from_json(obj_dict) for obj_dict in json_dict.get(cls._attributes_key, [])]
+        attributes = [Attribute.from_json(obj_dict) for obj_dict in json_dict.get(cls._attributes_key, [])]
+        keypoints = [Keypoint.from_json(obj_dict) for obj_dict in json_dict.get(cls._keypoints_key, [])]
 
         return cls(
             class_id=class_id,
             name=name,
             attributes=attributes,
+            keypoints=keypoints,
             has_mask=has_mask,
             is_unique=is_unique,
             is_ignored=is_ignored,
@@ -114,11 +120,22 @@ class ObjectClass(KnowledgeComponent):
             self._id_key: self.id,
             self._name_key: self.name,
             self._attributes_key: [attr.to_json() for attr in self.attributes],
+            self._keypoints_key: [kp.to_json() for kp in self.keypoints],
             self._has_mask_key: self.has_mask,
             self._is_unique_key: self.is_unique,
             self._is_ignored_key: self.is_ignored,
             self._color_key: self.color
         }
+
+    def validate_color(self, logger: Logger) -> bool:
+        """Validates that the hex color is valid."""
+        context_str = f"of Object Class ({self.id})"
+
+        # Check that the hex color is valid
+        if not bool(re.match(r"^#[\da-fA-F]{6}$", self.color)):
+            logger.error(f"{context_str} color \"{self.color}\" is not a valid hex color.")
+            return False
+        return True
 
     def validate_attributes(self, logger: Logger) -> bool:
         """Validates that the object attribute definitions are valid."""
@@ -126,26 +143,48 @@ class ObjectClass(KnowledgeComponent):
 
         # Check attribute id and name unicity
         success = check_list_unicity([a.id for a in self.attributes], logger, f"Attribute Id {context_str}")
-        success &= check_list_unicity([a.name for a in self.attributes], logger, f"Attribute Name {context_str}",
-                                      warn_only=True)
-
-        # Check that the hex color is valid
-        if not bool(re.match(r"^#[\da-fA-F]{6}$", self.color)):
-            logger.error(f"{context_str} color \"{self.color}\" is not a valid hex color.")
-            return False
+        success &= check_list_unicity(
+            [a.name for a in self.attributes],
+            logger,
+            f"Attribute Name {context_str}",
+            warn_only=True
+        )
 
         return success
 
-    def get_attribute_by_id(self, attr_id: int) -> ObjectAttribute | None:
-        """Returns the ObjectAttribute corresponding to the given id if found."""
+    def validate_keypoints(self, logger: Logger) -> bool:
+        """Validates that the object keypoint definitions are valid."""
+        context_str = f"of Object Class ({self.id})"
+
+        # Check keypoint id and name unicity
+        success = check_list_unicity([a.id for a in self.keypoints], logger, f"Keypoint Id {context_str}")
+        success &= check_list_unicity(
+            [a.name for a in self.keypoints],
+            logger,
+            f"Keypoint Name {context_str}",
+            warn_only=True
+        )
+
+        return success
+
+    def get_attribute_by_id(self, attr_id: int) -> Attribute | None:
+        """Returns the Attribute corresponding to the given id if found."""
         for attr in self.attributes:
             if attr.id == attr_id:
                 return attr
 
+    def get_keypoint_by_id(self, kp_id: int) -> Keypoint | None:
+        """Returns the Attribute corresponding to the given id if found."""
+        for kp in self.keypoints:
+            if kp.id == kp_id:
+                return kp
+
     def __repr__(self):
         attrs_repr = ",".join(map(repr, self.attributes))
-        return (f"ObjectClass(id={self.id}, name='{self.name}', attributes=[{attrs_repr}], has_mask={self.has_mask}, "
-                f"is_unique={self.is_unique}, is_ignored={self.is_ignored}, color={self.color})")
+        kps_repr = ",".join(map(repr, self.keypoints))
+        return (f"ObjectClass(id={self.id}, name='{self.name}', attributes=[{attrs_repr}], keypoints=[{kps_repr}], "
+                f"has_mask={self.has_mask}, is_unique={self.is_unique}, is_ignored={self.is_ignored}, "
+                f"color={self.color})")
 
     @classmethod
     def schema(cls) -> dict:
@@ -157,7 +196,11 @@ class ObjectClass(KnowledgeComponent):
                 cls._name_key: {"type": "string"},
                 cls._attributes_key: {
                     "type": "array",
-                    "items": {"$ref": ObjectAttribute.schema_name()}
+                    "items": {"$ref": Attribute.schema_name()}
+                },
+                cls._keypoints_key: {
+                    "type": "array",
+                    "items": {"$ref": Keypoint.schema_name()}
                 },
                 cls._has_mask_key: {"type": "boolean"},
                 cls._is_unique_key: {"type": "boolean"},

@@ -59,7 +59,7 @@ class TestKnowledgeGraph(TestCase):
         json_dict = {
             KnowledgeGraph._type_key: NaturalImageKG.get_graph_type(),
             KnowledgeGraph._object_classes_key: [ObjectClass(1, "").to_json()],
-            KnowledgeGraph._image_level_attributes_key: [IntAttribute(1, "a").to_json()]
+            KnowledgeGraph._image_level_annotation: ObjectClass(1, "", attributes=[IntAttribute(1, "a")]).to_json()
         }
         self.assertEqual(0, len(list(self.validator.iter_errors(json_dict))))
         res = KnowledgeGraph.from_json(json_dict)
@@ -70,7 +70,7 @@ class TestKnowledgeGraph(TestCase):
         json_dict = {
             KnowledgeGraph._type_key: NaturalImageKG.get_graph_type(),
             KnowledgeGraph._object_classes_key: [ObjectClass(1, "").to_json()],
-            KnowledgeGraph._image_level_attributes_key: [IntAttribute(0, "a").to_json()]
+            KnowledgeGraph._image_level_annotation: [IntAttribute(0, "a").to_json()]
         }
         self.assertEqual(1, len(list(self.validator.iter_errors(json_dict))))
 
@@ -299,7 +299,7 @@ class TestKnowledgeGraph(TestCase):
         self.assertEqual(3, self.handler.get_error_message_count())
 
     def test_hash_update_when_saving(self):
-        template = NaturalImageKG([], [], [], 0)
+        template = NaturalImageKG([], [], [], hash_=0)
         json_dict = template.to_json()
         new_hash = json_dict[template._hash_key]
         del json_dict[template._hash_key]

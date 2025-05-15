@@ -131,8 +131,8 @@ class TestBoxListOps(unittest.TestCase):
         ]).float()
         centers = BoxListOps.centers(BoxList(boxes, (50, 50)))
         expected_centers = torch.tensor([
-            [0, 0],
-            [1, .5]
+            [0.5, 0.5],
+            [1.5, 1]
         ]).float()
         torch.testing.assert_close(centers, expected_centers)
 
@@ -144,8 +144,8 @@ class TestBoxListOps(unittest.TestCase):
         ]).float().cuda()
         centers = BoxListOps.centers(BoxList(boxes, (50, 50)))
         expected_centers = torch.tensor([
-            [0, 0],
-            [1, .5]
+            [0.5, 0.5],
+            [1.5, 1]
         ]).float().cuda()
         torch.testing.assert_close(centers, expected_centers)
 
@@ -447,7 +447,7 @@ class TestBoxListOps(unittest.TestCase):
 
         expected_boxes = torch.tensor([
             [0., 1., 0., 1.],
-            [1., 1., 1., 1.]
+            [1., 1., 1., 1.]  # Boxes should be clipped
         ])
         expected_labelmap = torch.tensor([
             [0, 1],
@@ -722,3 +722,75 @@ class TestBoxListOps(unittest.TestCase):
     def test_affine_transformation_no_mask(self):
         with self.assertRaises(ValueError):
             BoxListOps.affine_transformation(BoxList(torch.tensor([[1, 3]]), (1,), BoxList.Mode.zyxzyx))
+
+    def test_affine_transformation_no_masks_translate(self):
+        boxlist = BoxList(
+            torch.tensor([
+                [0, 0, 1, 0],
+                [1, 0, 2, 1],
+                [1, 0, 2, 1]
+            ]),
+            image_size=(3, 3),
+            mode=BoxList.Mode.zyxzyx
+        )
+        transformed = BoxListOps.affine_transformation_no_masks(boxlist, translate=(0, 1))
+
+        expected_boxes = torch.tensor([
+            [0., 1., 1., 1.],
+            [1., 1., 2., 2.],  # Boxes should be clipped
+            [1., 1., 2., 2.]
+        ])
+
+        torch.testing.assert_close(transformed.boxes, expected_boxes)
+
+    def test_affine_transformation_no_masks_translate_cuda(self):
+        boxlist = BoxList(
+            torch.tensor([
+                [0, 0, 1, 0],
+                [1, 0, 2, 1],
+                [1, 0, 2, 1]
+            ]),
+            image_size=(3, 3),
+            mode=BoxList.Mode.zyxzyx
+        ).to(device="cuda")
+        transformed = BoxListOps.affine_transformation_no_masks(boxlist, translate=(0, 1))
+
+        expected_boxes = torch.tensor([
+            [0., 1., 1., 1.],
+            [1., 1., 2., 2.],  # Boxes should be clipped
+            [1., 1., 2., 2.]
+        ]).cuda()
+
+        torch.testing.assert_close(transformed.boxes, expected_boxes)
+
+    def test_affine_transformation_no_masks_scale(self):
+        boxlist = BoxList(
+            torch.tensor([
+                [1, 1, 2, 2]
+            ]),
+            image_size=(4, 4),
+            mode=BoxList.Mode.zyxzyx
+        )
+        transformed = BoxListOps.affine_transformation_no_masks(boxlist, scale=(1, 2))
+
+        expected_boxes = torch.tensor([
+            [1., 0., 2., 3.]
+        ])
+
+        torch.testing.assert_close(transformed.boxes, expected_boxes)
+
+    def test_affine_transformation_no_masks_scale_cuda(self):
+        boxlist = BoxList(
+            torch.tensor([
+                [1, 1, 2, 2]
+            ]),
+            image_size=(4, 4),
+            mode=BoxList.Mode.zyxzyx
+        ).to(device="cuda")
+        transformed = BoxListOps.affine_transformation_no_masks(boxlist, scale=(1, 2))
+
+        expected_boxes = torch.tensor([
+            [1., 0., 2., 3.]
+        ]).cuda()
+
+        torch.testing.assert_close(transformed.boxes, expected_boxes)

@@ -313,10 +313,21 @@ class BoxList:
         # First figure out which boxes are kept
         box_indices_kept = torch.unique(mapping)
 
+        if box_indices_kept.numel() == 0:
+            # Nothing kept, so just create empty tensors
+            self.PRED_REL_CLS_SCORES = self.PRED_REL_CLS_SCORES[[]]
+            self.PRED_REL_LABELS = self.PRED_REL_LABELS[[]]
+            self.REL_PAIR_IDXS = self.REL_PAIR_IDXS[[]]
+            self.PRED_REL_CLS_SCORES = self.PRED_REL_CLS_SCORES[[]]
+            self.PRED_REL_LABELS = self.PRED_REL_LABELS[[]]
+            return
+
         # Then figure which relation pairs we can keep (where both subject and object are kept)
         rel_pair_idxs = self.REL_PAIR_IDXS
         # noinspection PyTypeChecker
-        valid_rel_pair_idxs = torch.all(sum([rel_pair_idxs == kept_idx for kept_idx in box_indices_kept]), 1)
+        valid_rel_pair_idxs = torch.all(
+            torch.stack([rel_pair_idxs == kept_idx for kept_idx in box_indices_kept]).sum(0), 1
+        )
 
         # Then we can index all three fields
         rel_pair_idxs = rel_pair_idxs[valid_rel_pair_idxs]
@@ -335,8 +346,8 @@ class BoxList:
 
         # Else find all combinations for each pair
         match_matrix = (rel_pair_idxs.view(-1)[:, None] == mapping).view(rel_pair_idxs.shape[0], 2, mapping.numel())
-        # Batched matmul to compute possible pairs
-        combination_matrices = torch.bmm(match_matrix[:, 0, :, None].int(), match_matrix[:, 1, None].int())
+        # Batched matmul to compute possible pairs (not implemented for other than float on cuda)
+        combination_matrices = torch.bmm(match_matrix[:, 0, :, None].float(), match_matrix[:, 1, None].float()).int()
         # Update fields
         non_zeros = torch.nonzero(combination_matrices)
         self.REL_PAIR_IDXS = non_zeros[:, 1:]  # Remove the batch index

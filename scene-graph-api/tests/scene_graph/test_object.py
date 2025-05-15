@@ -49,7 +49,7 @@ class TestObject(TestCase):
             BoundingBox._class_id_key: self.object_class_id,
             BoundingBox._id_key: 2,
             BoundingBox._name_key: "name",
-            BoundingBox._attributes_key: [ObjectAttribute(3, "val").to_json()],
+            BoundingBox._attributes_key: [Attribute(3, "val").to_json()],
             BoundingBox._bb_key: [[1], [2]]
         }
         self.assertEqual(0, len(list(self.validator.iter_errors(json_dict))))
@@ -99,35 +99,35 @@ class TestObject(TestCase):
         self.assertEqual(4, len(list(self.validator.iter_errors({}))))
 
     def test_validate_success(self):
-        obj = Object(self.object_class_id, 2, "name", [ObjectAttribute(self.template_str_attr.id, "attr")])
+        obj = Object(self.object_class_id, 2, "name", attributes=[Attribute(self.template_str_attr.id, "attr")])
         success = obj.validate(self.template, self.logger)
         self.assertTrue(success)
         self.assertEqual(0, self.handler.get_warning_message_count())
         self.assertEqual(0, self.handler.get_error_message_count())
 
     def test_validate_valid_unknown_class_id(self):
-        obj = Object(42, 2, "name", [])
+        obj = Object(42, 2, "name")
         success = obj.validate(self.template, self.logger)
         self.assertFalse(success)
         self.assertEqual(0, self.handler.get_warning_message_count())
         self.assertEqual(1, self.handler.get_error_message_count())
 
     def test_validate_valid_missing_attr(self):
-        obj = Object(self.object_class_id, 2, "name", [])
+        obj = Object(self.object_class_id, 2, "name")
         success = obj.validate(self.template, self.logger)
         self.assertFalse(success)
         self.assertEqual(0, self.handler.get_warning_message_count())
         self.assertEqual(1, self.handler.get_error_message_count())
 
     def test_validate_valid_unknown_attr(self):
-        obj = Object(self.object_class_id, 2, "name", [ObjectAttribute(42, "attr"), ObjectAttribute(1, "attr templ")])
+        obj = Object(self.object_class_id, 2, "name", attributes=[Attribute(42, "attr"), Attribute(1, "attr templ")])
         success = obj.validate(self.template, self.logger)
         self.assertFalse(success)
         self.assertEqual(0, self.handler.get_warning_message_count())
         self.assertEqual(1, self.handler.get_error_message_count())
 
     def test_to_json(self):
-        obj = BoundingBox(1, 2, "name", [ObjectAttribute(3, 4)], ((1,), (1,)))
+        obj = BoundingBox(1, 2, "name", ((1,), (1,)), attributes=[Attribute(3, 4)])
         json_dict = obj.to_json()
         self.assertEqual(obj.class_id, json_dict[BoundingBox._class_id_key])
         self.assertEqual(obj.id, json_dict[BoundingBox._id_key])
@@ -141,7 +141,7 @@ class TestObject(TestCase):
             BoundingBox._class_id_key: self.object_class_id,
             BoundingBox._id_key: 2,
             BoundingBox._name_key: "name",
-            BoundingBox._attributes_key: [ObjectAttribute(3, "val").to_json()],
+            BoundingBox._attributes_key: [Attribute(3, "val").to_json()],
             BoundingBox._bb_key: [[1, 2, 3], [4, 5, 6]],
         }
         self.assertEqual(0, len(list(self.validator.iter_errors(json_dict))))
@@ -159,7 +159,7 @@ class TestObject(TestCase):
             BoundingBox._class_id_key: self.object_class_id,
             BoundingBox._id_key: 2,
             BoundingBox._name_key: "name",
-            BoundingBox._attributes_key: [ObjectAttribute(3, "val").to_json()]
+            BoundingBox._attributes_key: [Attribute(3, "val").to_json()]
         }
         self.assertEqual(1, len(list(self.validator.iter_errors(json_dict))))
 
@@ -168,7 +168,7 @@ class TestObject(TestCase):
             BoundingBox._class_id_key: self.object_class_id,
             BoundingBox._id_key: 2,
             BoundingBox._name_key: "name",
-            BoundingBox._attributes_key: [ObjectAttribute(3, "val").to_json()],
+            BoundingBox._attributes_key: [Attribute(3, "val").to_json()],
             BoundingBox._bb_key: [[1, 2, 3]],
         }
         self.assertEqual(1, len(list(self.validator.iter_errors(json_dict))))
@@ -178,8 +178,9 @@ class TestObject(TestCase):
             self.object_class_id,
             2,
             "name",
-            [ObjectAttribute(self.template_str_attr.id, "attr")],
             [[1, 2, 3], [4, 5, 6]],
+            attributes=[Attribute(self.template_str_attr.id, "attr")]
+            ,
         )
         success = bb.validate(self.template, self.logger)
         self.assertTrue(success)
@@ -188,7 +189,7 @@ class TestObject(TestCase):
 
     def test_bounding_box_to_json_bb_as_tuple(self):
         # Tuple bb needs to be converted to a list for serialization
-        obj = BoundingBox(1, 2, "name", [ObjectAttribute(3, 4)], ((1, 2), (3, 4)))
+        obj = BoundingBox(1, 2, "name", ((1, 2), (3, 4)), attributes=[Attribute(3, 4)])
         json_dict = obj.to_json()
         self.assertEqual(obj.class_id, json_dict[BoundingBox._class_id_key])
         self.assertEqual(obj.id, json_dict[BoundingBox._id_key])
@@ -198,7 +199,7 @@ class TestObject(TestCase):
         self.assertEqual([[1, 2], [3, 4]], json_dict[BoundingBox._bb_key])
 
     def test_validate_bbox_length_mismatch(self):
-        obj = BoundingBox(1, 2, "name", [ObjectAttribute(1, 4)], ((1, 2), (3,)))
+        obj = BoundingBox(1, 2, "name", ((1, 2), (3,)), attributes=[Attribute(1, 4)])
         success = obj.validate(self.template, self.logger)
         self.assertFalse(success)
         self.assertEqual(0, self.handler.get_warning_message_count())

@@ -36,8 +36,6 @@ import numpy as np
 import torch
 from typing_extensions import Self
 
-import pycocotools3d.mask as mask_utils
-import pycocotools3d.mask3d as mask_utils3d
 from ..utils.indexing import FlipDim
 from ..utils.indexing import sanitize_cropping_box
 
@@ -172,8 +170,10 @@ class BinaryMaskList(AbstractMaskList):
                 rle_sizes = [tuple(inst["size"]) for inst in masks]
 
                 if self.n_dim == 2:
+                    import pycocotools3d.mask as mask_utils
                     masks = mask_utils.decode(masks)  # [h, w, n]
                 else:
+                    import pycocotools3d.mask3d as mask_utils3d
                     masks = mask_utils3d.decode(masks)  # [d, h, w, n]
                 masks = torch.tensor(masks).permute(self.n_dim, *list(range(self.n_dim)))
 
@@ -379,7 +379,9 @@ class PolygonInstance(AbstractMask):
 
     def convert_to_binary_mask(self) -> torch.Tensor:
         """To raw tensor labelmap."""
+        import pycocotools3d.mask as mask_utils
         assert self.n_dim == 2, "Implemented only for 2D."
+
         height, width = self.size
         # formatting for COCO PythonAPI
         polygons = [p.numpy() for p in self.polygons]

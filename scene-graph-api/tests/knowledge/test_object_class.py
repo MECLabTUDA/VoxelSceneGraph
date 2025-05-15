@@ -18,7 +18,7 @@ import logging
 from unittest import TestCase
 
 from scene_graph_api.knowledge import ObjectClass
-from scene_graph_api.knowledge.ObjectAttribute import *
+from scene_graph_api.knowledge.Attribute import *
 from scene_graph_api.logging_handlers import TestingHandler
 from scene_graph_api.utils.parsing import get_validator
 
@@ -128,7 +128,8 @@ class TestObjectClass(TestCase):
         self.assertEqual("#fffff0", res.color)
 
     def test_to_json(self):
-        obj_class = ObjectClass(1, "name", [StrAttribute(2, "test")], True, True, True, "#ffffff")
+        obj_class = ObjectClass(1, "name", attributes=[StrAttribute(2, "test")], keypoints=[], has_mask=True,
+                                is_unique=True, is_ignored=True, color="#ffffff")
         obj_dict = obj_class.to_json()
         self.assertEqual(0, len(list(self.validator.iter_errors(obj_dict))))
         self.assertEqual(obj_class.id, obj_dict[ObjectClass._id_key])
@@ -180,7 +181,7 @@ class TestObjectClass(TestCase):
 
     def test_validate_attributes_invalid_color(self):
         obj_class = ObjectClass(1, "name", [StrAttribute(2, "test"), StrAttribute(3, "test2")], color="dummy_color")
-        success = obj_class.validate_attributes(self.logger)
+        success = obj_class.validate_color(self.logger)
         self.assertFalse(success)
         self.assertEqual(0, self.handler.get_warning_message_count())
         self.assertEqual(1, self.handler.get_error_message_count())

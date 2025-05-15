@@ -27,8 +27,9 @@ from typing import Type
 
 from typing_extensions import Self
 
+from . import Keypoint
+from .Attribute import Attribute
 from .KnowledgeComponent import KnowledgeComponent
-from .ObjectAttribute import ObjectAttribute
 from .ObjectClass import ObjectClass
 from .RelationRule import RelationRule
 from ..utils.indexing import contiguous_mapping
@@ -46,10 +47,11 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
     -> This is particularly useful to check which graph was used to annotate a specific scene graph.
     -> Hashes are computed when loading from JSON and updated when saving to JSON.
     """
-    # TODO: attributes that are common to all object classes
     _object_classes_key = "classes"
     _rules_key = "rules"
-    _image_level_attributes_key = "image"
+    _image_level_annotation = "image"  # Image level annotation
+    _obj_cls_common_annotation = "all_objects"  # Attributes/keypoints shared across all objects classes
+    _rel_cls_common_annotation = "all_relations"  # Attributes/keypoints shared across all relation rules
     _type_key = "type"
     _hash_key = "hash"
     registered_types: dict[str, Type[KnowledgeGraph]] = {}
@@ -64,12 +66,22 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
             self,
             classes: list[ObjectClass],
             rules: list[RelationRule] | None = None,
-            image_level_attributes: list[ObjectAttribute] | None = None,
+            image_level_attributes: list[Attribute] | None = None,
+            image_level_keypoints: list[Keypoint] | None = None,
+            obj_common_attributes: list[Attribute] | None = None,
+            obj_common_keypoints: list[Keypoint] | None = None,
+            rel_common_attributes: list[Attribute] | None = None,
+            rel_common_keypoints: list[Keypoint] | None = None,
             hash_: int = 0
     ):
         self.classes = classes
         self.rules = rules if rules is not None else []
-        self.image = ObjectClass(0, "Background", attributes=image_level_attributes)
+        self.image = ObjectClass(1, "Background",
+                                 attributes=image_level_attributes, keypoints=image_level_keypoints)
+        self.obj_common = ObjectClass(1, "ObjCommon",
+                                      attributes=obj_common_attributes, keypoints=obj_common_keypoints)
+        self.rel_common = RelationRule(1, "RelCommon",
+                                      attributes=rel_common_attributes, keypoints=rel_common_keypoints)
         self.hash = hash_
 
     @classmethod
@@ -77,11 +89,35 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
         type_val = json_dict[cls._type_key]
         object_classes = [ObjectClass.from_json(obj_dict) for obj_dict in json_dict[cls._object_classes_key]]
         rules = [RelationRule.from_json(obj_dict) for obj_dict in json_dict.get(cls._rules_key, [])]
-        image_level_attributes = [ObjectAttribute.from_json(obj_dict)
-                                  for obj_dict in json_dict.get(cls._image_level_attributes_key, [])]
+
+        if cls._image_level_annotation in json_dict:
+            image_level_annotation = ObjectClass.from_json(json_dict[cls._image_level_annotation])
+        else:
+            image_level_annotation = ObjectClass(1, "Background")
+
+        if cls._obj_cls_common_annotation in json_dict:
+            obj_common = ObjectClass.from_json(json_dict[cls._obj_cls_common_annotation])
+        else:
+            obj_common = ObjectClass(1, "ObjCommon")
+
+        if cls._rel_cls_common_annotation in json_dict:
+            rel_common = RelationRule.from_json(json_dict[cls._rel_cls_common_annotation])
+        else:
+            rel_common = RelationRule(1, "RelCommon")
+
         hash_val = int(json_dict.get(cls._hash_key, hash(frozenset(json_dict))))
 
-        graph = cls.registered_types[type_val](object_classes, rules, image_level_attributes, hash_val)
+        graph = cls.registered_types[type_val](
+            object_classes,
+            rules,
+            image_level_attributes=image_level_annotation.attributes,
+            image_level_keypoints=image_level_annotation.keypoints,
+            obj_common_attributes=obj_common.attributes,
+            obj_common_keypoints=obj_common.keypoints,
+            rel_common_attributes=rel_common.attributes,
+            rel_common_keypoints=rel_common.keypoints,
+            hash_=hash_val
+        )
         graph._load_additional_fields(json_dict)
 
         return graph
@@ -89,8 +125,10 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
     def to_json(self) -> dict:
         json_dict = {
             self._type_key: self.get_graph_type(),
+            self._image_level_annotation: self.image.to_json(),
+            self._obj_cls_common_annotation: self.obj_common.to_json(),
+            self._rel_cls_common_annotation: self.rel_common.to_json(),
             self._object_classes_key: [obj_class.to_json() for obj_class in self.classes],
-            self._image_level_attributes_key: [attr.to_json() for attr in self.image.attributes],
             self._rules_key: [rule.to_json() for rule in self.rules]
         }
         self._save_additional_fields(json_dict)
@@ -108,7 +146,9 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
 
         # Validate object attributes
         for obj_class in self.classes:
+            success &= obj_class.validate_color(logger)
             success &= obj_class.validate_attributes(logger)
+            success &= obj_class.validate_keypoints(logger)
         # Check that object class ids and names are unique
         success &= check_list_unicity(known_object_classes, logger, "Object Class id")
         success &= check_list_unicity([a.name for a in self.classes], logger, "Object Class name",
@@ -120,8 +160,15 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
         success &= check_list_unicity([a.id for a in self.rules], logger, "Rule id")
         success &= check_list_unicity([a.name for a in self.rules], logger, "Rule name", warn_only=True)
 
-        # Validate image level attributes
+        # Validate image level annotation
         success &= self.image.validate_attributes(logger)
+        success &= self.image.validate_keypoints(logger)
+        # Validate obj common annotation
+        success &= self.obj_common.validate_attributes(logger)
+        success &= self.obj_common.validate_keypoints(logger)
+        # Validate rel common annotation
+        success &= self.rel_common.validate_attributes(logger)
+        success &= self.rel_common.validate_keypoints(logger)
 
         return success
 
@@ -135,7 +182,7 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
             with open(path, "w") as f:
                 # TODO we don't always want that since the annotation data is not perfect
                 #  We only want to do that after the Scene Graphs are created
-                self.remap_ids_as_contiguous()
+                # self.remap_ids_as_contiguous()
                 json.dump(self.to_json(), f)
             return True
         except FileNotFoundError:
@@ -154,7 +201,7 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
             if errors:
                 for error in errors:
                     logger.error(error.message)
-                return
+                return None
 
             graph = KnowledgeGraph.from_json(obj_dict)
             if graph.validate(logger):
@@ -220,10 +267,14 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
             for rule in self.rules:
                 rule.id = rule_mapping.get(rule.id, rule.id)
 
-        # Image level attribute ids
-        if self.image.attributes:
-            for new_id, attr in enumerate(self.image.attributes, 1):
-                attr.id = new_id
+        # Image level / obj common / rel common annotation
+        for obj_class in [self.image, self.obj_common, self.rel_common]:
+            if obj_class.attributes:
+                for new_id, attr in enumerate(obj_class.attributes, 1):
+                    attr.id = new_id
+            if obj_class.keypoints:
+                for new_id, kp in enumerate(obj_class.keypoints, 1):
+                    kp.id = new_id
 
         return self
 
@@ -231,8 +282,16 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
         classes_repr = ",".join(map(repr, self.classes))
         rules_repr = ",".join(map(repr, self.rules))
         image_attr_repr = ",".join(map(repr, self.image.attributes))
-        return (f"{type(self).__name__}(classes=[{classes_repr}],rules=[{rules_repr}],"
-                f"image_level_attributes=({image_attr_repr}),hash={self.hash})")
+        image_kp_repr = ",".join(map(repr, self.image.keypoints))
+        obj_common_attr_repr = ",".join(map(repr, self.obj_common.attributes))
+        obj_common_kp_repr = ",".join(map(repr, self.obj_common.keypoints))
+        rel_common_attr_repr = ",".join(map(repr, self.rel_common.attributes))
+        rel_common_kp_repr = ",".join(map(repr, self.rel_common.keypoints))
+        return (f"{type(self).__name__}(classes=[{classes_repr}],rules=[{rules_repr}], "
+                f"image_level_attributes=[{image_attr_repr}], image_level_keypoints=[{image_kp_repr}], "
+                f"obj_common_attributes=[{obj_common_attr_repr}], obj_common_attributes=[{obj_common_kp_repr}], "
+                f"rel_common_attributes=[{rel_common_attr_repr}], rel_common_keypoints=[{rel_common_kp_repr}], "
+                f"hash={self.hash})")
 
     def copy(self) -> Self:
         return deepcopy(self)
@@ -255,7 +314,9 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
                 },
                 cls._object_classes_key: {"type": "array", "items": {"$ref": ObjectClass.schema_name()}},
                 cls._rules_key: {"type": "array", "items": {"$ref": RelationRule.schema_name()}},
-                cls._image_level_attributes_key: {"type": "array", "items": {"$ref": ObjectAttribute.schema_name()}},
+                cls._image_level_annotation: {"$ref": ObjectClass.schema_name()},
+                cls._obj_cls_common_annotation: {"$ref": ObjectClass.schema_name()},
+                cls._rel_cls_common_annotation: {"$ref": RelationRule.schema_name()},
                 cls._hash_key: {"type": "integer"}
             },
             "required": [cls._type_key],
@@ -301,7 +362,7 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
         from datetime import datetime
 
         # TODO ids as contiguous
-        # TODO support attributes
+        # TODO support attributes / keypoints
         # TODO support image-level annotation
 
         # Suppress any additional information
@@ -343,6 +404,7 @@ class _ImageAxis(Enum):
                 return 1
             case self.sagittal:
                 return 2
+        raise ValueError()
 
 
 class RadiologyImageKG(KnowledgeGraph):
@@ -361,13 +423,28 @@ class RadiologyImageKG(KnowledgeGraph):
             self,
             classes: list[ObjectClass],
             rules: list[RelationRule] | None = None,
-            image_level_attributes: list[ObjectAttribute] | None = None,
+            image_level_attributes: list[Attribute] | None = None,
+            image_level_keypoints: list[Keypoint] | None = None,
+            obj_common_attributes: list[Attribute] | None = None,
+            obj_common_keypoints: list[Keypoint] | None = None,
+            rel_common_attributes: list[Attribute] | None = None,
+            rel_common_keypoints: list[Keypoint] | None = None,
             hash_: int = 0,
             window_center: int = 50,  # Used for display
             window_width: int = 100,  # Used for display
             default_axis: _ImageAxis = _ImageAxis.axial  # Used for display
     ):
-        super().__init__(classes, rules, image_level_attributes, hash_)
+        super().__init__(
+            classes,
+            rules,
+            image_level_attributes=image_level_attributes,
+            image_level_keypoints=image_level_keypoints,
+            obj_common_attributes=obj_common_attributes,
+            obj_common_keypoints=obj_common_keypoints,
+            rel_common_attributes=rel_common_attributes,
+            rel_common_keypoints=rel_common_keypoints,
+            hash_=hash_
+        )
         # Used for display
         self.window_center = window_center
         self.window_width = window_width

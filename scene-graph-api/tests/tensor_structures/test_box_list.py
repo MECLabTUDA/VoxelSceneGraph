@@ -22,7 +22,7 @@ from nibabel import Nifti1Image
 
 from scene_graph_api.knowledge import ObjectClass, RelationRule, NaturalImageKG, IntAttribute, FloatAttribute, \
     StrAttribute, BoolAttribute, EnumAttribute
-from scene_graph_api.scene import SceneGraph, BoundingBox, Relation, ObjectAttribute
+from scene_graph_api.scene import SceneGraph, BoundingBox, Relation, Attribute
 from scene_graph_api.tensor_structures import BoxList, BinaryMaskList, FieldExtractor, BoxListConverter
 
 
@@ -196,7 +196,7 @@ class TestBoxList(unittest.TestCase):
     def _prepare_graph() -> tuple[SceneGraph, np.ndarray]:
         # Prepare knowledge and graph
         template = NaturalImageKG(
-            classes=[ObjectClass(1, "", [], has_mask=True)],
+            classes=[ObjectClass(1, "", has_mask=True)],
             rules=[RelationRule(1, "")]
         )
 
@@ -209,8 +209,8 @@ class TestBoxList(unittest.TestCase):
         img = Nifti1Image(labelmap, np.eye(4))
 
         objects = [
-            BoundingBox(1, 1, "", [], [[0, 0, 0], [0, 1, 1]]),
-            BoundingBox(1, 2, "", [], [[0, 1, 0], [1, 1, 0]]),
+            BoundingBox(1, 1, "", [[0, 0, 0], [0, 1, 1]]),
+            BoundingBox(1, 2, "", [[0, 1, 0], [1, 1, 0]]),
         ]
         relations = [Relation(1, 1, 2)]
 
@@ -385,24 +385,28 @@ class TestBoxList(unittest.TestCase):
 
         # Check that we can handle object lists that are not ordered and with alternating object classes
         objects = [
-            BoundingBox(1, 1, "", [
-                ObjectAttribute(attr_id=2, value=1.),
-                ObjectAttribute(attr_id=3, value="1."),
-                ObjectAttribute(attr_id=1, value=1),
-            ], [[0, 0, 0], [0, 1, 1]]),
-            BoundingBox(1, 3, "", [
-                ObjectAttribute(attr_id=2, value=2.),
-                ObjectAttribute(attr_id=3, value="2."),
-                ObjectAttribute(attr_id=1, value=2),
-            ], [[0, 0, 0], [0, 1, 2]]),
-            BoundingBox(2, 2, "", [
-                ObjectAttribute(attr_id=1, value=True),
-                ObjectAttribute(attr_id=2, value="b"),
-            ], [[0, 1, 0], [1, 1, 0]]),
-            BoundingBox(2, 4, "", [
-                ObjectAttribute(attr_id=1, value=False),
-                ObjectAttribute(attr_id=2, value=3),
-            ], [[0, 1, 0], [1, 2, 0]]),
+            BoundingBox(1, 1, "", [[0, 0, 0], [0, 1, 1]],
+                        attributes=[
+                            Attribute(attr_id=2, value=1.),
+                            Attribute(attr_id=3, value="1."),
+                            Attribute(attr_id=1, value=1),
+                        ]),
+            BoundingBox(1, 3, "", [[0, 0, 0], [0, 1, 2]],
+                        attributes=[
+                            Attribute(attr_id=2, value=2.),
+                            Attribute(attr_id=3, value="2."),
+                            Attribute(attr_id=1, value=2),
+                        ]),
+            BoundingBox(2, 2, "", [[0, 1, 0], [1, 1, 0]],
+                        attributes=[
+                            Attribute(attr_id=1, value=True),
+                            Attribute(attr_id=2, value="b"),
+                        ]),
+            BoundingBox(2, 4, "", [[0, 1, 0], [1, 2, 0]],
+                        attributes=[
+                            Attribute(attr_id=1, value=False),
+                            Attribute(attr_id=2, value=3),
+                        ])
         ]
 
         img = Nifti1Image(np.zeros((5, 5, 5), dtype=np.uint8), np.eye(4))

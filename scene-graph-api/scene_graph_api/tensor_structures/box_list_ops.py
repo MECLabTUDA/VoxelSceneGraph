@@ -223,7 +223,7 @@ class BoxListOps:
         """Compute the zyx center point of the boxes."""
         boxlist = boxlist.convert(boxlist.Mode.zyxzyx)
         center_points = [
-            (boxlist.boxes[:, dim] + boxlist.boxes[:, dim + boxlist.n_dim]) / 2
+            (boxlist.boxes[:, dim] + boxlist.boxes[:, dim + boxlist.n_dim] + 1) / 2
             for dim in range(boxlist.n_dim)
         ]
         return torch.stack(center_points, dim=1)
@@ -239,6 +239,8 @@ class BoxListOps:
         """
         if isinstance(min_size, int):
             min_size = (min_size,) * boxlist.n_dim
+        if isinstance(min_size, (tuple, list)) and len(min_size) != boxlist.n_dim:
+            min_size = min_size * boxlist.n_dim
         assert len(min_size) == boxlist.n_dim
 
         zyxdhw_boxes = boxlist.convert(boxlist.Mode.zyxdhw).boxes
@@ -256,6 +258,8 @@ class BoxListOps:
     @staticmethod
     def clip_to_image(boxlist: BoxListBase, remove_empty: bool = True):
         """Clip boxes to the image size. Optionally remove empty boxes."""
+        orig_mode = boxlist.mode
+        boxlist = boxlist.convert(boxlist.Mode.zyxzyx)
         boxes = boxlist.boxes.clone()
 
         for i in range(boxlist.n_dim):
@@ -274,7 +278,7 @@ class BoxListOps:
                                            (boxes[:, boxlist.n_dim + i] == boxes[:, i]) &
                                            (boxes[:, i] != boxlist.size[i] - 1) & (boxes[:, i] != 0)
                                            for i in range(boxlist.n_dim)])
-        return new_boxlist[keep]
+        return new_boxlist[keep].convert(orig_mode)
 
     @staticmethod
     def volume(boxlist: BoxListBase) -> torch.Tensor:
@@ -510,6 +514,41 @@ class BoxListOps:
             filtered_boxlist.del_field(filtered_boxlist.AnnotationField.LABELMAP)
 
         return filtered_boxlist.convert(orig_mode)
+
+    @staticmethod
+    def affine_transformation_no_masks(
+            boxlist: BoxListBase,
+            translate: tuple[float, ...] = (0.,),
+            scale: tuple[float, ...] = (1.,)
+    ) -> BoxListBase:
+        """
+        Similar to affine_transformation, but it does not require any masks.
+        :returns: the transformed BoxList.
+        """
+        if len(boxlist) == 0:
+            return boxlist
+
+        n_dim = boxlist.boxes.shape[1] // 2
+        orig_mode = boxlist.mode
+        boxlist = boxlist.copy_with_all_fields()
+
+        # Expand 1 length tuples
+        if len(translate) == 1:
+            translate *= n_dim
+        if len(scale) == 1:
+            scale *= n_dim
+
+        # Compute the new bounding boxes (zyxzyx)
+        centers = BoxListOps.centers(boxlist)
+        centers += torch.tensor(translate).to(centers)
+
+        boxlist = boxlist.convert(boxlist.Mode.zyxdhw)
+        lengths = boxlist.boxes[:, n_dim:]
+        lengths *= torch.tensor(scale).to(lengths)
+
+        boxlist.boxes = torch.hstack([centers - lengths / 2, lengths])
+
+        return BoxListOps.clip_to_image(boxlist.convert(orig_mode), remove_empty=True)
 
     @staticmethod
     def indexing_with_segmentation_update(

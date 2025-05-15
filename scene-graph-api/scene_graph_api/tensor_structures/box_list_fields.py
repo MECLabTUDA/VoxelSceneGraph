@@ -18,16 +18,26 @@ from enum import Enum
 
 class AnnotationField(Enum):
     """Fields used to store annotations."""
-    ATTRIBUTES = "attributes"
+    ATTRIBUTES = "attributes"  # Obj class common attributes are prepended and the rest are added as block_diag
+    ATTR_CLS_OFFSETS = "attr_cls_offsets"  # Since class-specific attributes are appended one after the other,
+    #                                        this field provides a cumulative sum for easier indexing
+    #                                        Note: start with a 0, the index for class with id 1 is offsets[1].
     IMAGE_ATTRIBUTES = "image_attributes"
+    IMAGE_KEYPOINTS = "image_keypoints"
     LABELS = "labels"  # Tensor with the int label for each box
-    KEYPOINTS = "keypoints"
+    KEYPOINTS = "keypoints"  # Obj class common keypoints are prepended and the rest are added as block_diag
+    KP_CLS_OFFSETS = "kp_cls_offsets"  # Since class-specific keypoints are appended one after the other,
+    #                                    this field provides a cumulative sum for easier indexing
     MASKS = "masks"  # Individual binary masks for each object as a BinaryMaskList
     IMPORTANCE = "importance"  # Weight for each object; allows to focus the training on more relevant objects.
     #                            Usually computed on the fly based on relations as (1 + #rels implicating this object)
     LABELMAP = "labelmap"  # Instance segmentation mask for the whole image
     SEGMENTATION = "segmentation"  # Semantic segmentation mask for the whole image
     RELATIONS = "relations"  # Relations as NxN matrix with relation label for each pair of object
+    RELATION_ATTRIBUTES = "relation_attributes"  # Same as for obj attributes
+    REL_ATTR_CLS_OFFSETS = "rel_attr_cls_offsets"  # Same as for objects
+    RELATION_KEYPOINTS = "relation_keypoints"  # Same as for obj relations
+    REL_KP_CLS_OFFSETS = "rel_kp_cls_offsets"  # Same as for objects
     AFFINE_MATRIX = "affine_matrix"  # Affine matrix for radiology images, removes the need to read the image for this
     IMG_PATH = "path"  # Path to the corresponding image; can be useful when saving results
 
@@ -41,10 +51,10 @@ class AnnotationField(Enum):
 
     def indexing_power(self) -> int:
         match self:
-            case AnnotationField.ATTRIBUTES | AnnotationField.LABELS | \
+            case AnnotationField.ATTRIBUTES | AnnotationField.LABELS | AnnotationField.KEYPOINTS | \
                  AnnotationField.MASKS | AnnotationField.IMPORTANCE:
                 return 1
-            case AnnotationField.RELATIONS:
+            case AnnotationField.RELATIONS | AnnotationField.RELATION_ATTRIBUTES | AnnotationField.RELATION_KEYPOINTS:
                 return 2
             case _:
                 return 0
@@ -64,6 +74,8 @@ class PredictionField(Enum):
     ATTRIBUTE_LOGITS = "attribute_logits"  # Logits for all attribute classes
     PRED_ATTRIBUTES = "pred_attributes"  # Post-sigmoid logits
     KEYPOINT_LOGITS = "keypoint_logits"
+    PRED_IMAGE_ATTRIBUTES = "image_attribute_logits"
+    IMAGE_KEYPOINT_LOGITS = "image_keypoint_logits"
     # Relations
     PRED_REL_CLS_SCORES = "pred_rel_cls_scores"  # Predicted score for each predicate class (including background)
     PRED_REL_LABELS = "pred_rel_labels"  # Predicted predicate class; mostly unused, rather computed as argmax of scores
@@ -71,6 +83,8 @@ class PredictionField(Enum):
     BOXES_PER_CLS = "boxes_per_cls"  # Added by the box head; bbox prediction for each class (including the background)
     #                                  (required (for sgdet only) because the obj class prediction is not final yet,
     #                                  and we might need to switch to the predicted box for the new class)
+    PRED_REL_ATTRIBUTES = "rel_attribute_logits"
+    REL_KEYPOINT_LOGITS = "rel_keypoint_logits"
     # RPN
     MATCHED_IDXS = "matched_idxs"  # Index of GT object matched with predicted object. Negative if no match.
     REGRESSION_TARGETS = "regression_targets"  # RPN-internal

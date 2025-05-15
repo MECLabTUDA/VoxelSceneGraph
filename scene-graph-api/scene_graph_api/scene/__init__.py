@@ -14,7 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+from .Attribute import Attribute
+from .Keypoint import Keypoint
 from .Object import Object, BoundingBox
-from .ObjectAttribute import ObjectAttribute
 from .Relation import Relation
 from .SceneGraph import SceneGraph

@@ -54,10 +54,10 @@ class BoxListConverter:
         The BoxList will have LABELS, LABELMAP, and RELATIONS fields.
         WARNING: this method should only be used with SceneGraphs that have been remapped to contiguous ids.
         Note: all attributes are added as block_diag tensors, i.e. only one tensor for all object classes/instances.
-        Note: currently no support for keypoints.
         """
+        # TODO: need a lot of tests...
         dhw_shape = graph.object_labelmap.shape
-
+        n_dim = len(dhw_shape)
         box_coordinates_xyxy = []
         obj_classes = []
         for obj in sorted(graph.iter_bounding_boxes(), key=lambda bb: bb.id):
@@ -75,37 +75,12 @@ class BoxListConverter:
         # Add labels
         target.LABELS = torch.tensor(obj_classes, dtype=torch.long)
 
-        # Add attributes
-        # Note: to construct the tensor, it's easier to use torch.block_diag after computing arrays per object class
-        #       However, this can also change the ordering of objects, so we also keep track of the original ordering
-        attr_per_obj_class = defaultdict(list)
-        mapping = {}
+        # Add the labelmap
+        target.LABELMAP = torch.from_numpy(graph.object_labelmap).to(torch.uint8)
+
         knowledge = graph.knowledge_graph
-        for block_diag_idx, obj in enumerate(graph.iter_bounding_boxes()):
-            mapping[obj.id - 1] = block_diag_idx
-            obj_class = knowledge.get_object_class_by_id(obj.class_id)
-            attr_values = [
-                obj_class.get_attribute_by_id(attr.id).value_instance_to_long(attr.value)
-                for attr in sorted(obj.attributes, key=lambda attr: attr.id)
-            ]
-            attr_per_obj_class[obj.class_id].append(attr_values)
-        block_diag_attrs = torch.block_diag(
-            *[torch.tensor(attrs, dtype=torch.long) for attrs in attr_per_obj_class.values()]
-        )
-        if block_diag_attrs.nelement() > 0:
-            inverse_mapping = torch.tensor([mapping[idx] for idx in range(len(mapping))], dtype=torch.long)
-            target.ATTRIBUTES = block_diag_attrs[inverse_mapping]
 
-        # Add image-level attribute
-        # Note: incompatible attributes are just replaced by a default value
-        img_attr_values = [
-            knowledge.image.get_attribute_by_id(attr.id).value_instance_to_long(attr.value)
-            for attr in sorted(graph.image.attributes, key=lambda attr: attr.id)
-        ]
-        if img_attr_values:
-            target.IMAGE_ATTRIBUTES = torch.tensor(img_attr_values, dtype=torch.long)
-
-        # Add relation to target
+        # Add relations to target
         num_box = len(target)
         relation_map = torch.zeros((num_box, num_box), dtype=torch.uint8)
         for rel_class_id, rels in graph.relations_by_rule_id.items():
@@ -117,8 +92,135 @@ class BoxListConverter:
                 relation_map[rel.subject_id - 1, rel.object_id - 1] = rel_class_id  # Object ids start at 1
         target.RELATIONS = relation_map
 
-        # Add the labelmap
-        target.LABELMAP = torch.from_numpy(graph.object_labelmap).to(torch.uint8)
+        # Add indexing offsets
+        target.ATTR_CLS_OFFSETS = torch.tensor(np.cumsum(
+            [0, len(knowledge.obj_common.attributes)] +
+            [len(obj_cls.attributes) for obj_cls in sorted(knowledge.classes, key=lambda cls: cls.id)]
+        ))
+        target.KP_CLS_OFFSETS = torch.tensor(np.cumsum(
+            [0, len(knowledge.obj_common.keypoints)] +
+            [len(obj_cls.keypoints) for obj_cls in sorted(knowledge.classes, key=lambda cls: cls.id)]
+        ))
+        target.REL_ATTR_CLS_OFFSETS = torch.tensor(np.cumsum(
+            [0, len(knowledge.rel_common.attributes)] +
+            [len(rule_cls.attributes) for rule_cls in sorted(knowledge.rules, key=lambda cls: cls.id)]
+        ))
+        target.REL_KP_CLS_OFFSETS = torch.tensor(np.cumsum(
+            [0, len(knowledge.rel_common.keypoints)] +
+            [len(rule_cls.attributes) for rule_cls in sorted(knowledge.rules, key=lambda cls: cls.id)]
+        ))
+
+        # ==============================================================================================================
+        # Add obj attributes
+        # Obj common
+        common_attrs = torch.tensor([
+            [
+                knowledge.obj_common.get_attribute_by_id(attr.id).value_instance_to_long(attr.value)
+                for attr in sorted(obj.common_attributes, key=lambda attr: attr.id)
+            ]
+            for obj in sorted(graph.iter_bounding_boxes(), key=lambda obj: obj.id)
+        ], dtype=torch.long)
+
+        # Note: to construct the tensor, it's easier to use torch.block_diag after computing arrays per object class
+        #       However, this can also change the ordering of objects, so we also keep track of the original ordering
+        attr_per_obj_class = defaultdict(list)
+        mapping = {}
+        for block_diag_idx, obj in enumerate(graph.iter_bounding_boxes()):
+            mapping[obj.id - 1] = block_diag_idx
+            obj_class = knowledge.get_object_class_by_id(obj.class_id)
+            attr_values = [
+                obj_class.get_attribute_by_id(attr.id).value_instance_to_long(attr.value)
+                for attr in sorted(obj.attributes, key=lambda attr: attr.id)
+            ]
+            attr_per_obj_class[obj.class_id].append(attr_values)
+        block_diag_attrs = torch.block_diag(
+            *[torch.tensor(attrs, dtype=torch.long) for attrs in attr_per_obj_class.values()]
+        )
+        inverse_mapping = torch.tensor([mapping[idx] for idx in range(len(mapping))], dtype=torch.long)
+        sorted_block_diag = block_diag_attrs[inverse_mapping]
+
+        all_attrs = torch.cat([common_attrs, sorted_block_diag], dim=1)
+        if all_attrs.nelement() > 0:
+            target.ATTRIBUTES = all_attrs
+        # ==============================================================================================================
+        # Add obj keypoints
+        # Obj common
+        common_kps = torch.tensor([
+            [kp.value for kp in sorted(obj.common_keypoints, key=lambda kp: kp.id)]
+            for obj in sorted(graph.iter_bounding_boxes(), key=lambda obj: obj.id)
+        ], dtype=torch.float32)
+
+        # Note: to construct the tensor, it's easier to use torch.block_diag after computing arrays per object class
+        #       However, this can also change the ordering of objects, so we also keep track of the original ordering
+        kp_per_obj_class = defaultdict(list)
+        for block_diag_idx, obj in enumerate(graph.iter_bounding_boxes()):
+            kp_values = [
+                [kp.value for kp in sorted(obj.keypoints, key=lambda kp: kp.id)]
+                for obj in sorted(graph.iter_bounding_boxes(), key=lambda obj: obj.id)
+            ]
+            attr_per_obj_class[obj.class_id].append(kp_values)
+        block_diag_kps = torch.block_diag(
+            *[torch.tensor(kps, dtype=torch.float32) for kps in kp_per_obj_class.values()]
+        )
+        sorted_block_diag = block_diag_kps[inverse_mapping]
+
+        all_kps = torch.cat([common_kps, sorted_block_diag], dim=1)
+        if all_kps.nelement() > 0:
+            target.KEYPOINTS = all_kps
+
+        # ==============================================================================================================
+        # Add rel attributes
+        # Note: since relations are sparse, it's easier to just build the tensor manually
+        if target.REL_ATTR_CLS_OFFSETS[-1] > 0:
+            rel_attrs_tensor = torch.zeros((num_box, num_box, target.REL_ATTR_CLS_OFFSETS[-1]), dtype=torch.long)
+            for relation in graph.iter_relations():
+                subj_idx = relation.subject_id - 1
+                obj_idx = relation.object_id - 1
+                # Rel common
+                for attr_cls in knowledge.rel_common.attributes:
+                    value = attr_cls.value_instance_to_long(relation.get_common_attribute_by_id(attr_cls.id).value)
+                    rel_attrs_tensor[subj_idx, obj_idx, attr_cls.id - 1] = value
+                # Class specific
+                offset = target.REL_ATTR_CLS_OFFSETS[relation.rule_id]
+                for attr_cls in knowledge.get_object_class_by_id(relation.rule_id).attributes:
+                    value = attr_cls.value_instance_to_long(relation.get_attribute_by_id(attr_cls.id).value)
+                    rel_attrs_tensor[subj_idx, obj_idx, offset + attr_cls.id - 1] = value
+            target.RELATION_ATTRIBUTES = rel_attrs_tensor
+
+        # ==============================================================================================================
+        # Add rel keypoints
+        # Note: since relations are sparse, it's easier to just build the tensor manually
+        if target.REL_KP_CLS_OFFSETS[-1] > 0:
+            rel_kps_tensor = torch.zeros((num_box, num_box, target.REL_KP_CLS_OFFSETS[-1], n_dim), dtype=torch.long)
+            for relation in graph.iter_relations():
+                subj_idx = relation.subject_id - 1
+                obj_idx = relation.object_id - 1
+                # Rel common
+                for kp_cls in knowledge.rel_common.keypoints:
+                    value = relation.get_common_keypoint_by_id(kp_cls.id).value
+                    rel_kps_tensor[subj_idx, obj_idx, kp_cls.id - 1] = value
+                # Class specific
+                offset = target.REL_KP_CLS_OFFSETS[relation.rule_id]
+                for kp_cls in knowledge.get_object_class_by_id(relation.rule_id).keypoints:
+                    value = relation.get_keypoint_by_id(kp_cls.id).value
+                    rel_kps_tensor[subj_idx, obj_idx, offset + kp_cls.id - 1] = value
+            target.RELATION_KEYPOINTS = rel_kps_tensor
+
+        # ==============================================================================================================
+        # Add image-level annotation
+        # Note: incompatible attributes are just replaced by a default value
+        img_attr_values = [
+            knowledge.image.get_attribute_by_id(attr.id).value_instance_to_long(attr.value)
+            for attr in sorted(graph.image.attributes, key=lambda attr: attr.id)
+        ]
+        if img_attr_values:
+            target.IMAGE_ATTRIBUTES = torch.tensor(img_attr_values, dtype=torch.long)
+        img_kp_values = [
+            knowledge.image.get_keypoint_by_id(kp.id).value
+            for kp in sorted(graph.image.keypoints, key=lambda kp: kp.id)
+        ]
+        if img_kp_values:
+            target.IMAGE_KEYPOINTS = torch.tensor(img_kp_values, dtype=torch.long)
 
         return target
 
@@ -135,13 +237,13 @@ class BoxListConverter:
         n_dim = boxlist.n_dim
         bounding_boxes = []
         labels = FieldExtractor.labels(boxlist)
+        # TODO handle all attributes and keypoints...
         for idx, (box, label) in enumerate(zip(boxlist.boxes, labels), start=1):
             bounding_boxes.append(
                 BoundingBox(
                     label.item(),
                     idx,
                     BoundingBox.default_name(graph, label, idx),
-                    [],  # TODO recover attributes once we support them
                     [box[:n_dim].tolist(), box[n_dim:].tolist()],
                 )
             )
@@ -308,6 +410,7 @@ class BoxListConverter:
         from pycocotools3d import mask3d as mask_utils3d, mask as mask_utils
 
         # TODO add test
+        # TODO handle all attributes / keypoints
         assert boxlist.n_dim == 3, f"Only implemented for 3D, got {boxlist.n_dim}D."
 
         target = boxlist.convert(boxlist.Mode.zyxdhw)
