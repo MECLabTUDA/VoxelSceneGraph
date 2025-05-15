@@ -147,11 +147,10 @@ def _prepare_for_coco_detection(
         iou[prediction.pred_labels[:, None] != target.labels[None]] = 0
         best_iou = iou.max(1)[0]
 
-        mapped_labels = [dataset.contiguous_category_id_to_json_id[i] for i in labels]
         coco_results.extend([
             {
                 "image_id": original_id,
-                "category_id": mapped_labels[k],
+                "category_id": labels[k],
                 "bbox": box,
                 "score": scores[k],
                 "iou": best_iou[k].item()

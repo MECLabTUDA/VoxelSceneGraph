@@ -93,6 +93,7 @@ class VGDataset(Dataset):
         return img, target, idx
 
     def get_statistics(self) -> DatasetStatistics:
+        # TODO do idx remapping
         fg_matrix, bg_matrix = self._get_VG_statistics(must_overlap=True)
         eps = 1e-3
         bg_matrix += 1

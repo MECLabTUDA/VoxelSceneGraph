@@ -25,7 +25,18 @@ _transform_schemes.register("HeadCT", [
     RandomDepthFlip,
     ClipAndRescale,
     AddChannelDim,
-    RandomAffine
+    RandomAffine,
+    ShrinkBoxes
+])
+
+_transform_schemes.register("HeadCTNoMasks", [
+    RandomHorizontalFlip,
+    RandomVerticalFlip,
+    RandomDepthFlip,
+    ClipAndRescale,
+    AddChannelDim,
+    RandomAffineNoMasks,
+    ShrinkBoxes
 ])
 
 

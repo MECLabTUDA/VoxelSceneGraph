@@ -177,13 +177,19 @@ def encode_box_info(proposals: list[BoxList]) -> torch.Tensor:
 
 
 def obj_edge_vectors(names: Sequence[str], wv_dir: str, wv_type: str = 'glove.6B', wv_dim: int = 300) -> torch.Tensor:
+    # Some medical terms have close matches, but have to be renamed
+    medical_wording_mapping = {
+        "ventricle system": "ventricles"
+    }
+
     wv_dict, wv_arr, wv_size = _load_word_vectors(wv_dir, wv_type, wv_dim)
 
     vectors = torch.Tensor(len(names), wv_dim)
     vectors.normal_(0, 1)
 
     for i, token in enumerate(names):
-        wv_index = wv_dict.get(token.lower())
+        token = token.lower()
+        wv_index = wv_dict.get(token, medical_wording_mapping.get(token))  # Fallback on medical mapping
         if wv_index is not None:
             vectors[i] = wv_arr[wv_index]
         else:
@@ -194,7 +200,8 @@ def obj_edge_vectors(names: Sequence[str], wv_dir: str, wv_type: str = 'glove.6B
             if wv_index is not None:
                 vectors[i] = wv_arr[wv_index]
             else:
-                _logger.debug(f"Fail on {token}")
+                _logger.error(f"Fail on {token}")
+                raise ValueError(f"Token {token} not found")
 
     return vectors
 

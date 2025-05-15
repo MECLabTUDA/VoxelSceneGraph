@@ -58,8 +58,8 @@ class COCODataset(COCOEvaluableDataset):
             cat_list[k] = v
         self.categories = cat_list
 
-        self._json_category_id_to_contiguous_id = {v: i + 1 for i, v in enumerate(self.coco.getCatIds())}
-        self.contiguous_category_id_to_json_id = {v: k for k, v in self._json_category_id_to_contiguous_id.items()}
+        self.json_category_id_to_contiguous_id = {v: i + 1 for i, v in enumerate(self.coco.getCatIds())}
+        self.contiguous_category_id_to_json_id = {v: k for k, v in self.json_category_id_to_contiguous_id.items()}
         self.contiguous_image_id_to_json_id = {k: v for k, v in enumerate(self._ids)}
 
     @property
@@ -100,7 +100,9 @@ class COCODataset(COCOEvaluableDataset):
         target = BoxList(boxes, tuple(reversed(img_size)), mode=BoxList.Mode.zyxdhw).convert(BoxList.Mode.zyxzyx)
 
         classes = [obj["category_id"] for obj in anno]
-        classes = [self._json_category_id_to_contiguous_id[c] for c in classes]
+        # TODO use the new reindex_groundtruth method
+        # TODO check if everything needs to be contiguous for pycocotools
+        classes = [self.json_category_id_to_contiguous_id[c] for c in classes]
         classes = torch.tensor(classes)
         target.LABELS = classes
 

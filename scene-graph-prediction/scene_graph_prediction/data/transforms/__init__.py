@@ -2,4 +2,4 @@
 from .build import build_transforms
 from .transforms import Compose, ResizeImage2D, ResizeTensor, RandomHorizontalFlip, RandomVerticalFlip, \
     RandomDepthFlip, ToTensor, Normalize, AbstractTransform, ColorJitter, AddChannelDim, BoundingBoxPerturbation, \
-    ClipAndRescale, RandomAffine, PrepareMasks
+    ClipAndRescale, RandomAffine, PrepareMasks, RandomAffineNoMasks

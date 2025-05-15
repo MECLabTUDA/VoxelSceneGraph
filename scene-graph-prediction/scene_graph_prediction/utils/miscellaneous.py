@@ -1,6 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 import errno
 import os
+from typing import Literal
 
 import numpy as np
 import torch
@@ -113,14 +114,13 @@ def torch_bbox_3d(arr: torch.BoolTensor) -> torch.LongTensor:
     return torch.tensor([r_min, c_min, z_min, r_max, c_max, z_max]).to(dtype=torch.int64, device=arr.device)
 
 
-# FIXMe this might be a duplicate functionality now (see FieldExtractor)
-def _segmentation_to_binary_masks(
+def _boxes_to_binary_masks(
         boxes: torch.Tensor,
         labels: torch.LongTensor,
         segmentation: torch.LongTensor
 ) -> torch.LongTensor:
     """
-    Given a batch of bounding boxes (zyxzyx) and their corresponding labels,
+    Given a batch of bounding boxes (zyxzyx), their corresponding labels, and the semantic segmentation mask,
     return the corresponding binary masks as Nx1xDxHxW based on the semantic segmentation (DxHxW).
     Note: works with ND.
     """
@@ -158,7 +158,7 @@ def get_pred_masks(prediction: BoxList) -> torch.Tensor:
 
     # We just need to slice the segmentation so that it has the same shape as the unpadded segmentation
     slicer = tuple(slice(0, s) for s in prediction.size)
-    return _segmentation_to_binary_masks(prediction.boxes, prediction.PRED_LABELS, prediction.PRED_SEGMENTATION[slicer])
+    return _boxes_to_binary_masks(prediction.boxes, prediction.PRED_LABELS, prediction.PRED_SEGMENTATION[slicer])
 
 
 def get_gt_masks(boxes: BoxList) -> torch.Tensor:
@@ -169,4 +169,40 @@ def get_gt_masks(boxes: BoxList) -> torch.Tensor:
     """
     if boxes.has_field(BoxList.AnnotationField.MASKS):
         return boxes.MASKS
-    return _segmentation_to_binary_masks(boxes.boxes, boxes.LABELS, boxes.SEGMENTATION)
+    return _boxes_to_binary_masks(boxes.boxes, boxes.LABELS, boxes.SEGMENTATION)
+
+
+def remap_id_tensor(tensor: torch.Tensor, id_mapping: dict[int, int]) -> torch.Tensor:
+    """Remap ids in a 1D tensor, e.g. LABELS tensor."""
+    tensor = tensor.clone()
+    for idx in range(tensor.numel()):
+        tensor[idx] = id_mapping[int(tensor[idx])]
+    return tensor
+
+
+def reindex_tensor(tensor: torch.Tensor, id_mapping: dict[int, int], dim: Literal[0, 1, 2] = 1) -> torch.Tensor:
+    """Given a batched ND tensor indexed by N x cls_idx x ... and a remapping, reorders it."""
+    if 0 not in id_mapping:
+        id_mapping = id_mapping.copy()
+        id_mapping[0] = 0
+    reverse_mapping = {v: k for k, v in id_mapping.items()}
+    tensor = tensor.clone()
+
+    slicer = torch.tensor([reverse_mapping[int(idx)] for idx in sorted(reverse_mapping.keys())]).long()
+    if dim == 0:
+        return tensor[slicer]
+    if dim == 1:
+        return tensor[:, torch.tensor([reverse_mapping[int(idx)] for idx in sorted(reverse_mapping.keys())]).long()]
+    if dim == 2:
+        return tensor[:, :, torch.tensor([reverse_mapping[int(idx)] for idx in sorted(reverse_mapping.keys())]).long()]
+    raise ValueError("dim must be 0, 1, or 2")
+
+
+def remap_segmentation(tensor: torch.Tensor, id_mapping: dict[int, int]) -> torch.Tensor:
+    """Remap ids in an ND tensor, e.g. SEGMENTATION tensor."""
+    out = torch.full_like(tensor, id_mapping.get(0, 0))
+    for idx in torch.unique(tensor):
+        if idx == 0:
+            continue
+        out[tensor == idx] = id_mapping[int(idx)]
+    return out

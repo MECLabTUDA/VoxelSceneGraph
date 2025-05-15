@@ -1,77 +1,111 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 """Centralized catalog of paths."""
-
 import os
+from pathlib import Path
 from typing import Type
 
 from yacs.config import CfgNode
 
-from .datasets import Dataset, RelationDetectionDataset, Split, RatioSpliter, FixedSpliter
+from .datasets import Dataset, RelationDetectionDataset, Split, FixedSpliter
 from .transforms import Compose
 
 
 class DatasetCatalog:
     _DATASET_TYPE_KEY = "dataset_type"
-    DATASETS_DIR = r"C:\Users\asanner\PycharmProjects\scene-graph-prediction/datasets/"
+    DATASETS_DIR = Path(__file__).parent.parent.parent.as_posix() + "/datasets/"
     CACHE_DIR = os.path.join(DATASETS_DIR, ".cache")
 
     DATASETS = {
-        "INSTANCE2022": {
-            "img_dir": DATASETS_DIR + "fed_sgg_full_rot/INSTANCE2022/images",
-            "annotation_dir": DATASETS_DIR + "fed_sgg_full_rot/INSTANCE2022/boxlists_wacv",
-            "knowledge_graph_file": DATASETS_DIR + "fed_sgg_full_rot/knowledge_graph_fixed.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "fed_sgg_full_rot/INSTANCE2022/split.json"),
+        "INST2022": {
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/split.json"),
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "MZ": {
-            "img_dir": DATASETS_DIR + "fed_sgg_full_rot/MZ/images",
-            "annotation_dir": DATASETS_DIR + "fed_sgg_full_rot/MZ/boxlists_wacv",
-            "knowledge_graph_file": DATASETS_DIR + "fed_sgg_full_rot/knowledge_graph_fixed.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "fed_sgg_full_rot/MZ/split.json"),
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/MZ/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/MZ/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/MZ/split.json"),
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "BHSD": {
-            "img_dir": DATASETS_DIR + "fed_sgg_full_rot/BHSD/images",
-            "annotation_dir": DATASETS_DIR + "fed_sgg_full_rot/BHSD/boxlists_wacv",
-            "knowledge_graph_file": DATASETS_DIR + "fed_sgg_full_rot/knowledge_graph_fixed.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "fed_sgg_full_rot/BHSD/split.json"),
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/BHSD/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/BHSD/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/BHSD/split.json"),
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "CQ500": {
-            "img_dir": DATASETS_DIR + "fed_sgg_full_rot/CQ500/images",
-            "annotation_dir": DATASETS_DIR + "fed_sgg_full_rot/CQ500/boxlists_wacv",
-            "knowledge_graph_file": DATASETS_DIR + "fed_sgg_full_rot/knowledge_graph_fixed.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "fed_sgg_full_rot/CQ500/split.json"),
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/CQ500/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/CQ500/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/CQ500/split.json"),
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
-        "INSTANCE2022_rel": {
-            "img_dir": DATASETS_DIR + "fed_sgg_full_rot/INSTANCE2022/images",
-            "annotation_dir": DATASETS_DIR + "fed_sgg_full_rot/INSTANCE2022/boxlists_wacv",
-            "knowledge_graph_file": DATASETS_DIR + "fed_sgg_full_rot/knowledge_graph_fixed.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "fed_sgg_full_rot/INSTANCE2022/split_rel_only.json"),
+        "PhysioNet": {
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/Iraq/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/Iraq/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/Iraq/split.json"),
+            _DATASET_TYPE_KEY: RelationDetectionDataset
+        },
+        "HemSeg200": {
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/HemSeg200/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/HemSeg200/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/HemSeg200/split.json"),
+            _DATASET_TYPE_KEY: RelationDetectionDataset
+        },
+
+        "INST_rel": {
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/split.json"),
+            "keep_only_with_rel": True,
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "MZ_rel": {
-            "img_dir": DATASETS_DIR + "fed_sgg_full_rot/MZ/images",
-            "annotation_dir": DATASETS_DIR + "fed_sgg_full_rot/MZ/boxlists_wacv",
-            "knowledge_graph_file": DATASETS_DIR + "fed_sgg_full_rot/knowledge_graph_fixed.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "fed_sgg_full_rot/MZ/split_rel_only.json"),
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/MZ/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/MZ/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/MZ/split.json"),
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "BHSD_rel": {
-            "img_dir": DATASETS_DIR + "fed_sgg_full_rot/BHSD/images",
-            "annotation_dir": DATASETS_DIR + "fed_sgg_full_rot/BHSD/boxlists_wacv",
-            "knowledge_graph_file": DATASETS_DIR + "fed_sgg_full_rot/knowledge_graph_fixed.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "fed_sgg_full_rot/BHSD/split_rel_only.json"),
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/BHSD/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/BHSD/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/BHSD/split.json"),
+            "keep_only_with_rel": True,
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "CQ500_rel": {
-            "img_dir": DATASETS_DIR + "fed_sgg_full_rot/CQ500/images",
-            "annotation_dir": DATASETS_DIR + "fed_sgg_full_rot/CQ500/boxlists_wacv",
-            "knowledge_graph_file": DATASETS_DIR + "fed_sgg_full_rot/knowledge_graph_fixed.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "fed_sgg_full_rot/CQ500/split_rel_only.json"),
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/CQ500/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/CQ500/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/CQ500/split.json"),
+            "keep_only_with_rel": True,
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
+        "PhysioNet_rel": {
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/Iraq/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/Iraq/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/Iraq/split.json"),
+            "keep_only_with_rel": True,
+            _DATASET_TYPE_KEY: RelationDetectionDataset
+        },
+        "HemSeg200_rel": {
+            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/HemSeg200/images",
+            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/HemSeg200/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/HemSeg200/split.json"),
+            "keep_only_with_rel": True,
+            _DATASET_TYPE_KEY: RelationDetectionDataset
+        }
     }
 
     @staticmethod

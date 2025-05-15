@@ -9,10 +9,10 @@ import numpy as np
 import torch
 import torchvision
 from PIL.Image import Image
-from scene_graph_api.utils.tensor import affine_transformation_grid
 from torchvision.transforms import functional as func
 from yacs.config import CfgNode as _CfgNode
 
+from scene_graph_api.utils.tensor import affine_transformation_grid
 from scene_graph_prediction.structures import BoxList, FieldExtractor, BoxListOps
 
 
@@ -432,6 +432,107 @@ class RandomAffine(AbstractTransform):
             output_segmentation=cfg.MODEL.REQUIRE_SEMANTIC_SEGMENTATION,
             output_masks=cfg.MODEL.MASK_ON,
         )
+
+
+class RandomAffineNoMasks(AbstractTransform):
+    """Random affine transform (but no rotation), that does not rely on label maps."""
+
+    def __init__(
+            self,
+            n_dim: int,
+            max_translate: tuple[int, ...],
+            scale_range: tuple[tuple[float, float], ...],
+            is_train: bool = True
+    ):
+        super().__init__()
+        assert len(max_translate) == n_dim
+        assert len(scale_range) == n_dim and all(r[0] <= r[1] for r in scale_range)
+
+        self.n_dim = n_dim
+        self.max_translate = max_translate
+        self.scale_range = scale_range
+        self.is_train = is_train
+
+    def forward(self, image: torch.Tensor, target: BoxList) -> tuple[torch.Tensor, BoxList]:
+        """
+        :param image: An image tensor with a channel dim and no batch dim.
+        :param target: a BoxList containing the annotation.
+        :return: The transformed image+target.
+        """
+        if not self.is_train:
+            # Optimize to (almost) no-op
+            # We need to make a shallow copy to protect against fields removal
+            # Also we need to make sure that only the correct mask fields are present
+            return image, target.copy_with_all_fields()
+
+        assert image.dim() == self.n_dim + 1
+
+        # Sample transform parameters
+        translate = tuple(0 if max_t == 0 else np.random.randint(-max_t, max_t + 1) for max_t in self.max_translate)
+        scale = tuple(np.random.uniform(min_s, max_s) for min_s, max_s in self.scale_range)
+
+        # Compute sampling grid (1xDxHxWxn_dim)
+        grid = affine_transformation_grid(tensor_size=image.shape[1:], translate=translate, scale=scale)
+        grid = grid.to(device=image.device, dtype=image.dtype)
+        # Adjust to the number of channels
+        grid = grid.tile((image.shape[0],) + (1,) * (self.n_dim + 1))
+
+        # Create batch dim for image and remove it after the transform
+        transformed_image = torch.nn.functional.grid_sample(image[None], grid, align_corners=False)[0]
+
+        return transformed_image, BoxListOps.affine_transformation_no_masks(target, translate=translate, scale=scale)
+
+    @staticmethod
+    def build(cfg: _CfgNode, is_train: bool) -> RandomAffineNoMasks:
+        n_dim = cfg.INPUT.N_DIM
+        if is_train:
+            max_translate = cfg.INPUT.AFFINE_MAX_TRANSLATE
+            scale_range = cfg.INPUT.AFFINE_SCALE_RANGE
+        else:
+            max_translate = (0,)
+            scale_range = ((1., 1.),)
+
+        if len(max_translate) == 1:
+            max_translate *= n_dim
+
+        if len(scale_range) == 1:
+            scale_range *= n_dim
+
+        return RandomAffineNoMasks(n_dim, max_translate, scale_range, is_train)
+
+
+class ShrinkBoxes(AbstractTransform):
+    """
+    Shrinking the bounding boxes without scaling the image
+    can sometimes speed up the convergence of the regression head.
+    """
+
+    def __init__(self, scaling_factor: float):
+        super().__init__()
+        assert 0 < scaling_factor <= 1.
+        self.scaling_factor = scaling_factor
+
+    def forward(self, image: torch.Tensor, target: BoxList) -> tuple[torch.Tensor, BoxList]:
+        """
+        :param image: An image tensor with a channel dim and no batch dim.
+        :param target: a BoxList containing the annotation.
+        :return: The transformed image+target.
+        """
+        if abs(1. - self.scaling_factor) < 1e-3:
+            # Optimize to (almost) no-op
+            # We need to make a shallow copy to protect against fields removal
+            # Also we need to make sure that only the correct mask fields are present
+            return image, target.copy_with_all_fields()
+        return image, BoxListOps.affine_transformation_no_masks(target, scale=(self.scaling_factor,))
+
+    @staticmethod
+    def build(cfg: _CfgNode, is_train: bool) -> ShrinkBoxes:
+        if is_train:
+            scaling_factor = cfg.INPUT.BOX_SHRINKING_FACTOR
+        else:
+            scaling_factor = 1.
+
+        return ShrinkBoxes(scaling_factor)
 
 
 class PrepareMasks(AbstractTransform):

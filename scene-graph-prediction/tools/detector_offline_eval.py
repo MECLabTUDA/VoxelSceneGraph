@@ -67,7 +67,7 @@ def run_val(cfg: CfgNode, evaluation_type: EvaluationType, logger: logging.Logge
             dataset=data_loader_val.dataset,
             dataset_name=dataset_name,
             predictions=predictions,
-            output_folder=None,  # As not to save the results again
+            output_folder=os.path.join(cfg.OUTPUT_DIR, "latest_validation", dataset_name),
             evaluation_type=evaluation_type,
             logger=logger
         )
@@ -116,7 +116,7 @@ def run_test(cfg: CfgNode, evaluation_type: EvaluationType, logger: logging.Logg
             dataset=data_loader_test.dataset,
             dataset_name=dataset_name,
             predictions=predictions,
-            output_folder=None,  # As not to save the results again
+            output_folder=os.path.join(cfg.OUTPUT_DIR, "test", dataset_name),
             evaluation_type=evaluation_type,
             logger=logger
         )

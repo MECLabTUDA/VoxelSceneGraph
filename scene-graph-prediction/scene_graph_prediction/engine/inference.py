@@ -99,6 +99,10 @@ def _compute_on_dataset(
                 #       only the latter requires targets
                 output, loss_dict = model(images.to(device), targets, compute_loss=compute_loss)
 
+            # Do any index remapping after the prediction is completed
+            # noinspection PyUnresolvedReferences
+            output = list(map(data_loader.dataset.reindex_prediction, output))
+
             if timer:
                 timer.toc()
             output = [o.to(cpu_device) for o in output]

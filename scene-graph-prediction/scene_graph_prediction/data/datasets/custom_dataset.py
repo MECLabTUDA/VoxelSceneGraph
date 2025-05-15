@@ -1,13 +1,13 @@
 from pathlib import Path
 
 import torch
+from yacs.config import CfgNode
+
 from pycocotools3d.coco import COCO3d
 from pycocotools3d.coco.abstractions.relation_detection import SSGDataset
 from scene_graph_api.knowledge import KnowledgeGraph
 from scene_graph_api.utils.nifti_io import NiftiImageWrapper
 from scene_graph_api.utils.pathing import remove_suffixes
-from yacs.config import CfgNode
-
 from scene_graph_prediction.structures import BoxList, FieldExtractor, BoxListOps, BoxListConverter
 from scene_graph_prediction.utils.logger import setup_logger
 from .Dataset import DatasetStatistics, SGGEvaluableDataset
@@ -15,6 +15,7 @@ from .Dataset import ImgInfo
 from .Split import DatasetSpliter
 from .Split import Split
 from ..transforms import Compose
+from ...utils.miscellaneous import remap_id_tensor
 
 
 class RelationDetectionDataset(SGGEvaluableDataset):
@@ -31,7 +32,8 @@ class RelationDetectionDataset(SGGEvaluableDataset):
             img_dir: str,
             annotation_dir: str,
             knowledge_graph_file: str,
-            spliter: DatasetSpliter
+            spliter: DatasetSpliter,
+            keep_only_with_rel: bool = False
     ):
         """
         Torch dataset for object detection based on annotation from scene_graph_annotation.
@@ -41,6 +43,7 @@ class RelationDetectionDataset(SGGEvaluableDataset):
         :param img_dir: folder containing all input images.
         :param annotation_dir: folder containing serialized BoxLists (with compressed masks).
         :param knowledge_graph_file: path to the knowledge graph used for annotating images.
+        :param keep_only_with_rel: whether cases with no relations should be filtered out
         """
         super().__init__(cfg, datasets_dir, transforms, split)
         # TODO add support for 2D?
@@ -77,7 +80,7 @@ class RelationDetectionDataset(SGGEvaluableDataset):
         # Load targets for split and remove small boxes
         self._compressed_targets: dict[str, BoxList] = {}
         min_size = cfg.INPUT.MIN_SIZE
-        for index, key in enumerate(self._fold_split_keys):
+        for index, key in enumerate(self._fold_split_keys.copy()):
             path = self._key_to_annotation_path[key]
             target = BoxList.load(path)
             target = BoxListOps.remove_small_boxes(target, min_size)
@@ -86,6 +89,12 @@ class RelationDetectionDataset(SGGEvaluableDataset):
             if self._cfg.MODEL.WEIGHTED_BOX_TRAINING and not target.has_field(target.AnnotationField.IMPORTANCE):
                 # Default to a uniform weighting of boxes
                 target.IMPORTANCE = torch.ones(len(target), dtype=torch.float32, device=target.boxes.device)
+
+            # Keep only with rel
+            if keep_only_with_rel:
+                if not target.has_field(target.AnnotationField.RELATIONS) or not torch.any(target.RELATIONS):
+                    self._fold_split_keys.remove(key)
+                    continue
 
             self._compressed_targets[remove_suffixes(path)] = target
 
@@ -96,8 +105,25 @@ class RelationDetectionDataset(SGGEvaluableDataset):
         # COCOEvaluableDataset Interface
         self._coco = None
 
-        json_category_id_to_contiguous_id = {v: i + 1 for i, v in enumerate(self.coco.getCatIds())}
-        self.contiguous_category_id_to_json_id = {v: k for k, v in json_category_id_to_contiguous_id.items()}
+        # Because the Hybrid Retina methods require unique objects to be last, we have to perform some id remapping
+        use_cats = not self._cfg.MODEL.RPN_ONLY
+        if not use_cats:
+            # Don't use categories so trivial case
+            self.json_category_id_to_contiguous_id = {0: 0, 1: 1}
+            self.contiguous_category_id_to_json_id = {0: 0, 1: 1}
+        else:
+            non_uniques = []
+            uniques = []
+            for cls in self.knowledge.classes:
+                (uniques if cls.is_unique else non_uniques).append(cls.id)
+            self.json_category_id_to_contiguous_id = {
+                cls_id: idx + 1
+                for idx, cls_id in enumerate(non_uniques + uniques)
+            }
+            self.contiguous_category_id_to_json_id = {v: k for k, v in self.json_category_id_to_contiguous_id.items()}
+            self.json_category_id_to_contiguous_id[0] = 0
+            self.contiguous_category_id_to_json_id[0] = 0
+
         self.contiguous_image_id_to_json_id = {v: v for v in range(len(self._fold_split_keys))}
         self.contiguous_image_id_to_json_name = {k: v for k, v in enumerate(self._fold_split_keys)}
 
@@ -113,6 +139,7 @@ class RelationDetectionDataset(SGGEvaluableDataset):
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, BoxList, int]:
         """
+        Can perform class id remapping in contrast to get_groundtruth().
         Note: targets have only their default fields (i.e. those that they were saved with).
         Note: we expect to have at least the LABELMAP (or binary masks), and the LABELS.
         Note: label maps are the preferred way to store instance segmentation as it's much more compact.
@@ -123,7 +150,10 @@ class RelationDetectionDataset(SGGEvaluableDataset):
 
         # Convert to tensor
         img = torch.from_numpy(nifti.get_fdata())
-        target = self._compressed_targets[self._fold_split_keys[idx]]
+        target = self._compressed_targets[self._fold_split_keys[idx]].copy_with_all_fields()
+        # Handle mapping to contiguous ids in a BoxList lazy copy
+        target = self.reindex_groundtruth(target)
+
         transformed_img, transformed_target = self._transforms(img, target)  # type: torch.Tensor, BoxList
 
         # Field selection is handled by the RandomAffine transform
@@ -162,6 +192,7 @@ class RelationDetectionDataset(SGGEvaluableDataset):
         Note: targets have the needed mask fields as defined in the config, i.e.:
               - MASKS if MODEL.MASK_ON
               - SEGMENTATION if MODEL.REQUIRE_SEMANTIC_SEGMENTATION
+              - No class id remapping that can be required for training
         """
         key = self._fold_split_keys[index]
         target = self._compressed_targets[key]
@@ -256,7 +287,9 @@ class RelationDetectionDataset(SGGEvaluableDataset):
         for key in self._fold_split_keys:
             target: BoxList = self._compressed_targets[key]  # No need to decompress masks
             relations = target.RELATIONS
-            labels = target.LABELS
+
+            # Do not forget to do the remapping, since this is only for training/inference
+            labels = remap_id_tensor(target.LABELS, self.json_category_id_to_contiguous_id)
 
             subj_ids, obj_ids = torch.where(relations != 0)  # Tuple of coordinates, one tensor for each dim i.e. 2
             for subj_id, obj_id in zip(subj_ids, obj_ids):
@@ -271,7 +304,8 @@ class RelationDetectionDataset(SGGEvaluableDataset):
         return {
             "fg_matrix": fg_matrix,
             "pred_dist": pred_dist,
-            "obj_classes": self.categories,
+            # Also do remapping here
+            "obj_classes": [self.categories[idx] for idx in self.contiguous_category_id_to_json_id],
             "rel_classes": self.predicates,
             "att_classes": self.attributes,
         }

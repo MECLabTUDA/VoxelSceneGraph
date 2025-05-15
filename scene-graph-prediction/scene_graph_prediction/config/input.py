@@ -13,7 +13,7 @@ INPUT.N_CHANNELS = 3
 # Number of object (/ segmentation mask) classes (including the "background" class)
 INPUT.N_OBJ_CLASSES = 2
 # Number of object classes that have exactly one object per image
-# These classes are assumed to be ordered last e.g. for stroke (bg, bleed, ventricle system, middle line)
+# These classes are assumed to be ordered last e.g. for stroke (background, bleed, ventricle system, midline)
 # Currently only used by the Stroke RetinaUNet
 INPUT.N_UNIQUE_OBJ_CLASSES = 0
 # Number of attribute classes
@@ -25,7 +25,7 @@ INPUT.N_KP_CLASSES = 1
 # Number of relation classes (including the "background" class)
 INPUT.N_REL_CLASSES = 1
 # Proposal height and width both need to be greater than MIN_SIZE
-INPUT.MIN_SIZE = (0,)
+INPUT.MIN_SIZE = (1,)
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Config related to data transforms/augmentation
@@ -83,3 +83,7 @@ INPUT.MAX_BB_SHIFT = 0
 INPUT.AFFINE_MAX_TRANSLATE = (0,)  # Either one int or one per dim
 INPUT.AFFINE_SCALE_RANGE = ((1., 1.),)  # Either a pair of float or one per dim
 INPUT.AFFINE_MAX_ROTATE = (0.,)  # Either one float or one per dim
+
+# Box shrinking: shrinking factor (the image/masks remain unchanged)
+# Note: may help with the convergence of the regression head
+INPUT.BOX_SHRINKING_FACTOR = 1.

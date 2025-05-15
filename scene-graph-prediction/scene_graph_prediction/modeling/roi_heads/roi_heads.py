@@ -302,7 +302,7 @@ class CombinedROIHeads(AbstractCombinedROIHeads):
                         kept_proposals, targets
                     )
                     refined_obj_logits, relation_logits, refined_att_logits, add_losses_required = \
-                        self.relation(features, kept_rel_pair_idxs, kept_proposals)
+                        self.relation(features, rel_pair_idxs, kept_proposals)
                     loss_relation = self.relation.loss(
                         refined_obj_logits,
                         relation_logits,
