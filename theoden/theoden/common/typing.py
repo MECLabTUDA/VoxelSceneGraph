@@ -141,9 +141,13 @@ class MetricResponse(ExecutionResponse):
             raise ValueError("Metrics must be a dictionary")
         for metric_name, metric_value in metrics.items():
             if not isinstance(metric_name, str):
-                raise ValueError("Metric names must be strings")
+                raise ValueError(
+                    f"Metric names must be strings. Found {type(metric_name)} for key {metric_name}."
+                )
             if not isinstance(metric_value, (float | int | None)):
-                raise ValueError("Metric values must be floats or int")
+                raise ValueError(
+                    f"Metric values must be floats or int. Found: {type(metric_value)} for key {metric_name}."
+                )
 
         super().__init__(
             data={
