@@ -1,27 +1,58 @@
-# Voxel Scene Graph
-
-This is our central hub for all our work on Voxel Scene Graph. It is still a WIP and fancy illustrations may come in
-the future. Anyway here is an overview of the repository that you can find here:
-
-- `pycocotools3d`: object detection evaluation for 3d bounding boxes and MS COCO format abstractions
-- `scene-graph-api`: data structures and abstractions to bridge data annotation and Deep Learning applications
-- `scene-graph-prediction`: framework for Voxel Scene Graph applications
-- `federated-scene-graph-prediction`: framework for Voxel Scene Graph applications trained 
-using Federated Learning
-- `theoden`: our fork of `TheODen` [framework](https://github.com/MECLabTUDA/TheODen) for Federated Learning
-Made with love by our colleagues ❤️
-- `3d-slicer-modules`: any custom module we design for 3D Slicer, currently only to make the segmentation of cohorts easier
-- `scene-graph-annotation`: tool for Voxel Scene Graph annotation and more
-- `NeurIPS2025`: instructions to reproduce our NeurIPS2025 results
-
-Our **Scene Graph annotation is openly available** on [Kaggle](https://www.kaggle.com/datasets/sannera/bleedscene3d).
-It includes Scene Graphs for 574 volumes from five open source datasets.
-
-**Note:** our dataset submission is under review at NeurIPS2025. We'll make the Kaggle dataset public upon acceptance
-(decision on 18th of Sep. 2025). 
-Until then, we'll do our best to have everything to document all our code/tools.
-
 ![sg_example.png](images/sg_example.png)
+
+# 🧠 Voxel Scene Graph
+
+This is our **central hub** for all our work on **Voxel Scene Graphs** of 3D medical images that combine object detection, segmentation, and relational reasoning.
+It includes datasets, annotation tools, and learning frameworks for research on structured reasoning in 3D medical imaging, with a focus on Intracranial Hemorrhage (ICH).
+
+## 🚀 Where to Start?
+
+New to the project? Here’s how to get started quickly 👇
+
+### 🗂️ 1. Download the Data
+
+Our annotated dataset **BleedScene3D** is openly available on [Kaggle](https://www.kaggle.com/datasets/sannera/bleedscene3d). It includes **574 annotated volumes** from multiple open datasets with harmonized scene graph annotations.
+> **Note:** The dataset will be made public upon acceptance of our IEEE TMI submission. Until then, you can still explore the API and tools locally.
+
+### 🧩 2. Load our Scene Graphs with Python
+
+Use our `scene-graph-api` library to open, and manipulate scene graphs. It contains all the necessary data structures to inspect data and serves as a bridge between data annotation and Deep Learning experiments.
+The [README](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/scene-graph-api) will guide through the installation process.
+
+### 🎨 3. Visualize our Scene Graphs
+
+Visualizing 3D Scene Graphs requires specialized tools. Thankfully, our annotation tool also provides intutive UI to visually inspect the annotated ground truth.
+Installation isntructions are available [here](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/scene-graph-annotation).
+
+### 🖋️ 4. Annotate or Extend the Dataset
+
+If you already went through the previous step, then you are already famiiar with our Scene Graph annotation tool.
+To fully annotate new images, you will first have to localize objects first.
+Our 3D Slicer [extension](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/3d-slicer-modules) can help you streamline this process.
+
+> 💬 **Having trouble configuring our tools?** Feel free to reach out or open a GitHub issue!
+
+> 📘 Detailed annotation protocols for our datasets are also available on [Kaggle](https://www.kaggle.com/datasets/sannera/bleedscene3d).
+
+### 🧠 5. Train and Evaluate Models
+
+For training Scene Graph Generation (SGG) or detection models:
+- Use the `scene-graph-prediction` [library](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/scene-graph-prediction) for centralized training.
+- Or use the `federated-scene-graph-prediction` [library](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/federated-scene-graph-generation) for privacy-preserving Federated Learning setups.
+
+Each framework comes with ready-to-run configs reproducing our published experiments.
+
+## 📦 Repository Overview
+
+| Module                             | Purpose                                                                         |
+| ---------------------------------- | ------------------------------------------------------------------------------- |
+| `pycocotools3d`                    | Evaluation for 3D object detection and MS-COCO-style abstractions               |
+| `scene-graph-api`                  | Core data structures and I/O for scene graphs                                   |
+| `scene-graph-prediction`           | Centralized framework for Scene Graph Generation                                |
+| `federated-scene-graph-prediction` | Federated training framework for privacy-preserving VSG                         |
+| `theoden`                          | Fork of [TheODen](https://github.com/MECLabTUDA/TheODen) for federated learning |
+| `3d-slicer-modules`                | Extensions to streamline segmentation and cohort annotation                     |
+| `scene-graph-annotation`           | Standalone GUI tool for relation and attribute annotation                       |
 
 ## Our Accepted Papers
 
