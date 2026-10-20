@@ -26,14 +26,16 @@ installation process.
 
 ### 🎨 3. Visualize our Scene Graphs
 
-Visualizing 3D Scene Graphs requires specialized tools. Thankfully, our annotation tool also provides intutive UI to
+Visualizing 3D Scene Graphs requires specialized tools. Thankfully, our annotation tool also provides an intuitive UI to
 visually inspect the annotated ground truth.
-Installation isntructions are
-available [here](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/scene-graph-annotation).
+Installation instructions are
+available [here](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/3d-slicer-modules)
+
+**Note**: our stand-alone tool available [here](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/scene-graph-annotation) is deprecated but still usable.
 
 ### 🖋️ 4. Annotate or Extend the Dataset
 
-If you already went through the previous step, then you are already famiiar with our Scene Graph annotation tool.
+If you already went through the previous step, then you are already familiar with our Scene Graph annotation tool.
 To fully annotate new images, you will first have to localize objects first.
 Our 3D Slicer [extension](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/3d-slicer-modules) can help you
 streamline this process.
@@ -79,7 +81,7 @@ To the best of our knowledge, this is the first application of Federated Learnin
 For this paper, we had to gather publicly available datasets with head CTs of ICH patients from around the world.
 We then **curated** and **annotated** these, which allowed to have **~450 annotated images**
 (compared to the ~150 from the MICCAI paper).
-In this paper, we not only show that models trained centrally on a single dataset fail to generalize to other datasets,
+In this paper, we do not only show that models trained centrally on a single dataset fail to generalize to other datasets,
 but that Federated Learning allows bridging this gap without breach of data privacy.
 You can find the pre-print **[here](https://arxiv.org/abs/2411.00578)**:
 
@@ -108,7 +110,7 @@ Voxel Scene Graph for Intracranial Hemorrhage. arXiv [Cs.CV]. Retrieved from htt
 
 This paper has been **accepted at [ICPR2024](https://icpr2024.org/)**.
 It focuses on the challenges of Intracranial Hemorrhage detection
-in voxel data, and introduced the novel VC-IoU loss for bounding box regression.
+in voxel data, and introduces the novel VC-IoU loss for bounding box regression.
 You can find the pre-print [here](https://www.arxiv.org/abs/2408.10768):
 
 ```
