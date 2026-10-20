@@ -16,9 +16,6 @@ limitations under the License.
 
 import json
 import logging
-import sys
-from pathlib import Path
-
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy, QGridLayout, \
@@ -34,26 +31,10 @@ from scene_graph_api.utils.parsing import load_json_from_path
 from .AnnotationWindow import AnnotationWindow
 from ..utils import VERSION
 
+from ..utils.pathing import get_datadir
 
-def get_datadir() -> Path:
-    """
-    Returns a parent directory path
-    where persistent application data can be stored.
 
-    # linux: ~/.local/share
-    # macOS: ~/Library/Application Support
-    # windows: C:/Users/<USER>/AppData/Roaming
-    """
 
-    home = Path.home()
-    if sys.platform == "win32":
-        return home / "AppData/Roaming"
-    elif sys.platform == "linux":
-        return home / ".local/share"
-    elif sys.platform == "darwin":
-        return home / "Library/Application Support"
-    else:
-        return Path(".")
 
 
 class MainWindow(QMainWindow):

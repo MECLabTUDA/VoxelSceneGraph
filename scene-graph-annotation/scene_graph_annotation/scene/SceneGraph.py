@@ -18,50 +18,18 @@ from __future__ import annotations
 
 import json
 from os import PathLike
+from pathlib import Path
 
-import nibabel as nib
 import numpy as np
 from PIL import ImageColor
 
 from scene_graph_api.scene import SceneGraph as _SceneGraph
-from . import Attribute
-from .Keypoint import Keypoint
-from .Object import BoundingBox
-from .Relation import Relation
-from ..knowledge import KnowledgeGraph
 
 
 class SceneGraph(_SceneGraph):
-    def __init__(
-            self,
-            knowledge_graph: KnowledgeGraph,
-            image_affine: np.ndarray,
-            image_header: nib.Nifti1Header | None,
-            bounding_box_objects: list[BoundingBox],
-            relations: list[Relation],
-            object_labelmap: np.ndarray,
-            image_level_attributes: list[Attribute] | None = None,
-            image_level_keypoints: list[Keypoint] | None = None,
-            obj_common_attributes: list[Attribute] | None = None,
-            obj_common_keypoints: list[Keypoint] | None = None,
-            rel_common_attributes: list[Attribute] | None = None,
-            rel_common_keypoints: list[Keypoint] | None = None,
-    ):
+    def __init__(self, *args, **kwargs):
         """Note: the labelmap/affine are expected to be depth-first."""
-        super().__init__(
-            knowledge_graph,
-            image_affine,
-            image_header,
-            bounding_box_objects,
-            relations,
-            object_labelmap,
-            image_level_attributes=image_level_attributes,
-            image_level_keypoints=image_level_keypoints,
-            obj_common_attributes=obj_common_attributes,
-            obj_common_keypoints=obj_common_keypoints,
-            rel_common_attributes=rel_common_attributes,
-            rel_common_keypoints=rel_common_keypoints
-        )
+        super().__init__(*args, **kwargs)
 
         # Counter used for generating new ids
         self._next_available_id = max(self._bb_by_id.keys()) + 1
@@ -78,6 +46,9 @@ class SceneGraph(_SceneGraph):
         :returns: success.
         """
         try:
+            if not Path(path).parent.exists():
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+
             # Copy and use super call
             sg_copy = self.copy()
             _SceneGraph.remap_ids_as_contiguous(sg_copy)
@@ -86,37 +57,6 @@ class SceneGraph(_SceneGraph):
             return True
         except FileNotFoundError:
             return False
-
-    def add_bounding_box(self, bb: BoundingBox):
-        """Adds the bounding box to the scene graph. Used when merging/splitting bounding boxes."""
-        if bb.class_id not in self._bb_by_class_id:
-            self._bb_by_class_id[bb.class_id] = []
-        self._bb_by_class_id[bb.class_id].append(bb)
-        self._bb_by_id[bb.id] = bb
-
-    def remove_bounding_box(self, bb: BoundingBox):
-        """
-        Removes the bounding box to the scene graph. Used when merging/splitting bounding boxes.
-        Note: this method is unsafe and does not clean any relation associated to the removed object.
-        :raises: a ValueError if missing.
-        """
-        self._bb_by_class_id[bb.class_id].remove(bb)
-        del self._bb_by_id[bb.id]
-
-    def add_relation(self, rel: Relation):
-        """
-        Adds the relation to the scene graph.
-        Used when merging/splitting segmentations and updating their relations.
-        """
-        self.relations_by_rule_id[rel.rule_id].append(rel)
-
-    def remove_relation(self, rel: Relation):
-        """
-        Removes the relation to the scene graph.
-        Used when merging/splitting segmentations and updating their relations.
-        :raises: a ValueError if missing.
-        """
-        self.relations_by_rule_id[rel.rule_id].remove(rel)
 
     def remap_ids_as_contiguous(self):
         """WARNING: is not UI compatible as some Widgets rely on the id to identify the widget for a bb..."""

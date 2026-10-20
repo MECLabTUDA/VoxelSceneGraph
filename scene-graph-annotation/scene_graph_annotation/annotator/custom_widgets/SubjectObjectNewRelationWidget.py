@@ -357,5 +357,10 @@ class SubjectObjectNewRelationWidget(QGroupBox):
         subject_inst = self._ui_manager.subject
         object_inst = self._ui_manager.object
         new_rel = Relation(rule_id, subject_inst.id, object_inst.id)
+        new_rel.init_attributes_keypoints(
+            self._scene_graph.knowledge_graph.get_rule_by_id(rule_id),
+            len(self._scene_graph.object_labelmap.shape),
+            self._scene_graph.knowledge_graph.rel_common
+        )
         self._scene_graph.add_relation(new_rel)
         self._ui_manager.relation_added.emit(new_rel)

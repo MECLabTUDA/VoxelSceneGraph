@@ -16,8 +16,6 @@ limitations under the License.
 
 import re as _re
 
-from .ArrayView import RadiologyImageArrayView
-
 VERSION = "0.1.0"
 
 

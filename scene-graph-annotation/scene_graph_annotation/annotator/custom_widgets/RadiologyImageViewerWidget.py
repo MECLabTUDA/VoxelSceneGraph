@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import QWidget, QLabel, QSizePolicy, QVBoxLayout, QHBoxLayo
 
 from scene_graph_annotation.scene import SceneGraph
 from scene_graph_annotation.ui_utils import QPixmapLabelWithMouseTracking
-from scene_graph_annotation.utils import RadiologyImageArrayView
+from scene_graph_annotation.utils.ArrayView import RadiologyImageArrayView
 from scene_graph_annotation.utils.asset_paths import cursor_icon, move_icon, scroll_icon, luminosity_icon, \
     zoom_in_icon, zoom_out_icon, reload_icon
 from scene_graph_annotation.utils.image_utils import rgba_array_to_qpixmap, combine_rgba_images

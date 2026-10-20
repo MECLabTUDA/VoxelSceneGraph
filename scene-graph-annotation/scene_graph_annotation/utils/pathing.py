@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from scene_graph_api.utils.pathing import remove_suffixes
+from scene_graph_api.utils.pathing import remove_suffixes, get_datadir
 
 remove_suffixes = remove_suffixes
+get_datadir = get_datadir

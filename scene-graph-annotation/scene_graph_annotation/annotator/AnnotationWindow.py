@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import QWidget, QLabel, QSizePolicy, QMainWindow, QStackedW
 from scene_graph_annotation.directed_graphs import dependencies_check
 from scene_graph_annotation.knowledge import KnowledgeGraph
 from scene_graph_annotation.utils.asset_paths import logo_path
-from ._custom_widgets import PatientSelectionWidget, SceneGraphEditorWidget, UIManager
+from .custom_widgets import PatientSelectionWidget, SceneGraphEditorWidget, UIManager
 
 
 class AnnotationWindow(QMainWindow):
