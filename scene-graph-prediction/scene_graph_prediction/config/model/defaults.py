@@ -67,6 +67,8 @@ MODEL.MASK_HEAD = "ROIMaskHead"
 # Note: does not require MASK_ON to be True to enable segmentation-based detection.
 # Note: if False and MASK_ON is True, then the segmentation is provided as binary masks
 MODEL.REQUIRE_SEMANTIC_SEGMENTATION = False
+# Allow to preserve the groundtruth binary masks even when MODEL.MASK_ON is False
+MODEL.REQUIRE_MASKS = False
 MODEL.KEYPOINT_ON = False
 MODEL.ATTRIBUTE_ON = False
 MODEL.RELATION_ON = False

@@ -48,11 +48,12 @@ class RPNModule(RPN[tuple[list[ImageAnchors], FeatureMapsObjectness, FeatureMaps
         self.box_selector = build_rpn_postprocessor(cfg, rpn_box_coder)
         self.loss_evaluator = build_rpn_loss_evaluator(cfg, rpn_box_coder, anchor_generator.num_anchors_per_level())
 
-    def forward(self, images: ImageList, features: FeatureMaps):
+    def forward(self, images: ImageList, features: FeatureMaps, precomputations: list[BoxList]):
         """
         :param images: Images for which we want to compute the predictions.
         :param features: Features computed from the images that are used for computing the predictions.
                           Each tensor in the list correspond to different feature levels
+        :param precomputations: (not used)
 
         :returns:
             anchors: a per-level list of anchors for the batch
@@ -80,6 +81,7 @@ class RPNModule(RPN[tuple[list[ImageAnchors], FeatureMapsObjectness, FeatureMaps
         else:
             with torch.no_grad():
                 boxes: RPNProposals = self.box_selector(anchors, objectness, rpn_box_regression, targets)
+        # noinspection PyUnboundLocalVariable
         return boxes
 
     def loss(self, args, targets: list[BoxList]) -> RPNLossDict:

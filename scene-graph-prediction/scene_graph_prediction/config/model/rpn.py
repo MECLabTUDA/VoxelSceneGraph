@@ -65,3 +65,8 @@ RPN.RPN_HEAD = "SingleConvRPNHead"
 # Note: To make sure the detector won't be missing any ground truth bbox,
 #       we add ground truth box to the output of RPN proposals during training
 RPN.ADD_GTBOX_TO_PROPOSAL_IN_TRAIN = False
+
+# ======================================================================================================================
+# Specifically for the RPN that produces detections from precomputations, whether it should be considered as an RPN
+# or a one-stage detector (entirely depends on what the precomputations contain).
+RPN.FROM_PRECOMPUTATIONS_ONE_STAGE = False

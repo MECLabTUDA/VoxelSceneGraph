@@ -72,7 +72,7 @@ class ROIRelationFeatureExtractor(torch.nn.Module, ABC):
 
 
 # ROIRelation Predictor
-RelationLogits = torch.LongTensor
+RelationLogits = torch.FloatTensor
 
 T = TypeVar("T")
 
@@ -97,7 +97,7 @@ class ROIRelationPredictor(torch.nn.Module, ABC, Generic[T]):
             obj_dists: logits of object label distribution
             rel_dists: logits of relation label distribution
             att_dists: optionally, logits of attributes label distribution (if attribute_on)
-            add_losses_required: optionally, any prediction that is required to compute additional losses for the method
+            add_losses_required: optionally, any prediction required to compute additional losses for the method
         """
         raise NotImplementedError
 

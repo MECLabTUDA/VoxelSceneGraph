@@ -17,34 +17,35 @@ class RetinaUNetSegLossComputation(torch.nn.Module):
         self.num_classes = num_classes  # Including the background
 
     def forward(self, seg_logits: SegLogits, targets: list[BoxList]) -> torch.Tensor:
-        assert len(seg_logits) == 1, \
-            "FIXME this whole mess of a code only works for a single image (otherwise a batch dim is added)"
-        flat_gt_seg = [target.SEGMENTATION.view(-1) for target in targets]
+        if not targets:
+            raise NotImplementedError("No fallback solution, when there is no image in the batch.")
+        return torch.mean(torch.stack([
+            self.forward_single_image(logits, target) for logits, target in zip(seg_logits, targets)
+        ]))
+
+    def forward_single_image(self, seg_logits_img: torch.FloatTensor, target: BoxList) -> torch.Tensor:
+        flat_gt_seg = target.SEGMENTATION.view(-1)
         # Since segmentations are not padded, they can have different sizes
         # As such we flatten them to 1D and concatenate together
-        cat_flat_gt_seg = torch.cat(flat_gt_seg)
 
         # We also need to remove the padding from the seg_logits,
         # so that its shape matches the one of the (unpadded) segmentation
-        unpadded_seg_logits = [
-            logits[(slice(None),) + tuple(slice(0, target.size[dim]) for dim in range(self.n_dim))]
-            for logits, target in zip(seg_logits, targets)
-        ]
+        unpadded_seg_logits = seg_logits_img[
+            (slice(None),) + tuple(slice(0, target.size[dim]) for dim in range(self.n_dim))
+            ]
         # Then we need to permute axes before we can flatten (put channels last)
-        # Note: seg_logits.dim() - 1 because we don't have any batch dim anymore
-        axes = tuple(range(1, seg_logits.dim() - 1)) + (0,)
-        permuted_seg_logits = [logits.permute(axes).view(-1, self.num_classes) for logits in unpadded_seg_logits]
-        cat_seg_logits = torch.cat(permuted_seg_logits)
+        axes = tuple(range(1, seg_logits_img.dim())) + (0,)
+        permuted_seg_logits = unpadded_seg_logits.permute(axes).view(-1, self.num_classes)
 
         # Compute the Dice loss
-        seg_loss_dice = self._squared_dice_loss(cat_seg_logits, cat_flat_gt_seg)
+        seg_loss_dice = self._squared_dice_loss(permuted_seg_logits, flat_gt_seg)
 
         # Compute the cross-entropy loss on the groundtruth foreground and predicted false positives
         # Note: nnDetection does not apply any non-linearity before loss call
-        pred_seg = torch.argmax(cat_seg_logits, dim=1)
-        gt_seg = cat_flat_gt_seg.long()
+        pred_seg = torch.argmax(permuted_seg_logits, dim=1)
+        gt_seg = flat_gt_seg.long()
         fg_union_mask = (pred_seg + gt_seg) > 0
-        seg_loss_ce = torch.nn.functional.cross_entropy(cat_seg_logits[fg_union_mask], gt_seg[fg_union_mask])
+        seg_loss_ce = torch.nn.functional.cross_entropy(permuted_seg_logits[fg_union_mask], gt_seg[fg_union_mask])
 
         return (seg_loss_ce + seg_loss_dice) / 2
 

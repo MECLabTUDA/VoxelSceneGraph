@@ -62,7 +62,7 @@ class KnowledgeGuidedObjectSampler(KnowledgeGuidedAbstractSampler):
         return group_to_ids
 
     def batch_collation(self, batch: list) -> tuple[ImageList, tuple[BoxList, ...], tuple[int, ...]]:
-        images, targets, img_ids = super().batch_collation(batch)
+        images, precomputations, targets, img_ids = list(zip(*batch))
 
         if self.strict_sampling:
             # Set the weights of objects not belonging to the group to 0
@@ -70,4 +70,4 @@ class KnowledgeGuidedObjectSampler(KnowledgeGuidedAbstractSampler):
                 # Note: we don't have to make a copy
                 target.IMPORTANCE[target.ATTRIBUTES[:, self.current_group] == 0] = 0.
 
-        return images, targets, img_ids
+        return images, precomputations, targets, img_ids

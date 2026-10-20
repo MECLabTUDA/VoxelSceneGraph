@@ -93,6 +93,6 @@ class ImageList:
     def __len__(self):
         return len(self.image_sizes)
 
-    def __iter__(self) -> ImageList:
+    def __iter__(self) -> Iterable[ImageList]:
         for idx in range(len(self)):
             yield self.ith_image_as_image_list(idx)

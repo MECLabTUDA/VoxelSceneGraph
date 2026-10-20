@@ -13,8 +13,6 @@ class _StackedBlock(torch.nn.Sequential):
     Conv block used in RetinaNet (1 block of 2 convs).
     Note: supports 2D and 3D.
     """
-    MAX_OUT = 320
-
     def __init__(
             self,
             n_dim: int,
@@ -22,12 +20,13 @@ class _StackedBlock(torch.nn.Sequential):
             out_channels: int,
             kernel_size: tuple[int, ...],
             stride: tuple[int, ...] | int = 1,
-            norm: NormType | None = None
+            norm: NormType | None = None,
+            max_out: int = 320
     ):
         padding = tuple([ks // 2 for ks in kernel_size])
 
-        if out_channels > self.MAX_OUT:
-            out_channels = self.MAX_OUT
+        if out_channels > max_out:
+            out_channels = max_out
 
         # Block 0
         c0 = build_conv(n_dim, in_channels, out_channels, kernel_size, stride, padding, norm, activation=True)
@@ -35,17 +34,6 @@ class _StackedBlock(torch.nn.Sequential):
         super().__init__(c0, c1)
         self.n_dim = n_dim
         self.out_channels = c1.out_channels
-
-
-class _Interpolate(torch.nn.Module):
-    def __init__(self, n_dim: int):
-        super().__init__()
-        self.n_dim = n_dim
-        self.scale_factor = 2 if n_dim == 2 else (1, 2, 2)
-        self.mode = "bilinear" if n_dim == 2 else "trilinear"
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.nn.functional.interpolate(x, scale_factor=self.scale_factor, mode=self.mode, align_corners=False)
 
 
 class FPN(Backbone):

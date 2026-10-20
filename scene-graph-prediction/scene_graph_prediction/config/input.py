@@ -26,6 +26,9 @@ INPUT.N_KP_CLASSES = 1
 INPUT.N_REL_CLASSES = 1
 # Proposal height and width both need to be greater than MIN_SIZE
 INPUT.MIN_SIZE = (1,)
+# Whether we have any detections or earlier results predicted outside of this framework and stored as a BoxList
+# Note: Some methods may require it.
+INPUT.HAS_PRECOMPUTATIONS = False
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Config related to data transforms/augmentation

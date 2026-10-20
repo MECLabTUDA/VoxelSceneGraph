@@ -83,8 +83,9 @@ def _compute_on_dataset(
     all_losses = defaultdict(list)
     for batch in tqdm(data_loader):
         with torch.no_grad():
-            images, targets, image_ids = batch  # type: ImageList, tuple[BoxList, ...], tuple[int, ...]
+            images, precomputations, targets, image_ids = batch  # type: ImageList, tuple[BoxList, ...], tuple[BoxList, ...], tuple[int, ...]
             images = ImageList.to_image_list(images, cfg.INPUT.N_DIM, size_divisible=cfg.DATALOADER.SIZE_DIVISIBILITY)
+            precomputations: list[BoxList] = [precomputation.to(device) for precomputation in precomputations]
             targets: list[BoxList] = [target.to(device) for target in targets]
             if timer:
                 timer.tic()
@@ -93,11 +94,11 @@ def _compute_on_dataset(
                 assert not cfg.MODEL.RELATION_ON
                 # Note: if cfg.TEST.BBOX_AUG.ENABLED then we're doing object detection
                 #       in this case, targets are not required but are passed for easier debugging
-                output, loss_dict = im_detect_bbox_aug(model, images, compute_loss, device, targets)
+                output, loss_dict = im_detect_bbox_aug(model, images, precomputations, compute_loss, device, targets)
             else:
                 # Note: this branch can both handle object detection and relation prediction
                 #       only the latter requires targets
-                output, loss_dict = model(images.to(device), targets, compute_loss=compute_loss)
+                output, loss_dict = model(images.to(device), precomputations, targets, compute_loss=compute_loss)
 
             # Do any index remapping after the prediction is completed
             # noinspection PyUnresolvedReferences

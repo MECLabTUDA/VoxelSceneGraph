@@ -1,6 +1,7 @@
 import torch
 from yacs.config import CfgNode
 
+from .from_precomputations import ProposalsFromPrecomputations
 from .retinanet import RetinaNetModule
 from .retinaunet import RetinaUNetModule
 from .retinaunet_hybrid import RetinaUNetHybridModule
@@ -36,6 +37,7 @@ RPNS.register("RPN", RPNModule)
 RPNS.register("RetinaNet", RetinaNetModule)
 RPNS.register("RetinaUNet", RetinaUNetModule)
 RPNS.register("RetinaUNetHybrid", RetinaUNetHybridModule)
+RPNS.register("ProposalsFromPrecomputations", ProposalsFromPrecomputations)
 
 
 def build_rpn(cfg: CfgNode, in_channels: int, anchor_strides: AnchorStrides) -> RPN:

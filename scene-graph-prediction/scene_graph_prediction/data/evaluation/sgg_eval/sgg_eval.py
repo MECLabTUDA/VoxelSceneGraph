@@ -37,12 +37,17 @@ class RelationsModeEvaluator:
         self.evaluators = [
             SGRecallEvaluator(mode, meta),
             # SGNoGraphConstraintRecallEvaluator(mode, meta),
-            SGMeanAveragePrecisionEvaluator(mode, meta)
+            SGMeanAveragePrecisionEvaluator(mode, meta),
+            SGPositivePredictiveValueEvaluator(mode, meta)
         ]
 
         if meta.n_rel_classes - 1 > 1:  # Exclude de background
             self.evaluators.append(SGMeanRecallEvaluator(mode, meta))
             # self.evaluators.append(SGNoGraphMeanRecallEvaluator(mode, meta))
+            for rel_cls in range(1, meta.n_rel_classes):
+                self.evaluators.append(SGRecallEvaluator(mode, meta, class_idx=rel_cls))
+            for rel_cls in range(1, meta.n_rel_classes):
+                self.evaluators.append(SGPositivePredictiveValueEvaluator(mode, meta, class_idx=rel_cls))
 
         if mode in [SGGEvaluationMode.PredicateClassification, SGGEvaluationMode.SceneGraphClassification]:
             self.evaluators.append(SGPairAccuracyEvaluator(mode, meta))

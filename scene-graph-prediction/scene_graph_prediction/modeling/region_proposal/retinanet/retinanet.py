@@ -145,7 +145,7 @@ class RetinaNetModule(RPN[tuple[list[ImageAnchors], list[ClassWiseObjectness], F
                                                   self.cfg.MODEL.KEYPOINT_ON or
                                                   self.cfg.MODEL.RELATION_ON)
 
-    def forward(self, images: ImageList, features: FeatureMaps):
+    def forward(self, images: ImageList, features: FeatureMaps, precomputations: list[BoxList]):
         """
         Support both normal detection and relation detection.
 
@@ -153,6 +153,7 @@ class RetinaNetModule(RPN[tuple[list[ImageAnchors], list[ClassWiseObjectness], F
         :param features: Features computed from the images that are used for computing the predictions.
                          Each tensor in the list correspond to a different feature level.
                          Note: usually expects the 6 levels produces by the FPN backbone.
+        :param precomputations: (not used)
 
         :returns: The predicted boxes from the RPN, one BoxList per image
         """

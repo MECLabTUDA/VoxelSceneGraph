@@ -4,6 +4,7 @@ from yacs.config import CfgNode
 
 from .fbnet import FBNetTrunk, build_fbnet_builder
 from .fpn import FPN2to6
+from .no_op import NoOpBackbone
 from .resnet import ResNet
 from .unet_3d import UNet3D
 from .vgg import VGG16
@@ -17,6 +18,9 @@ from ..registries import BACKBONES
 # So see Wrappers for Backbone and BackboneFPN that include proper typing,
 #  Should be replaced with a proper interface combining Backbone and FPN
 
+@BACKBONES.register("NoOpBackbone")
+def _build_no_op_backbone(cfg: CfgNode) -> Backbone:
+    return NoOpBackbone(cfg)
 
 @BACKBONES.register("VGG-16")
 def _build_vgg_fpn_backbone(cfg: CfgNode) -> Backbone:

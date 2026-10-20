@@ -1,4 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+import logging
+
 import numpy as np
 import torch
 from torch import nn
@@ -339,11 +341,75 @@ class DownScaleConvFeatureExtractor(ROIBoxFeatureExtractor):
         return x.view(x.shape[0], np.prod(x.shape[1:]))
 
     def output_size(self) -> tuple[int, ...]:
-        res = self.cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION // 4
-        if self.n_dim == 2:
-            return self.representation_size, res, res
-        else:
-            return self.representation_size, self.cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION_DEPTH // 4, res, res
+        raise RuntimeError("Not compatible with a mask head")
+
+
+@ROI_BOX_FEATURE_EXTRACTORS.register("DeepConvFeatureExtractor")
+class DeepConvFeatureExtractor(ROIBoxFeatureExtractor):
+    """Downscale convs similar to the FPN. Max 320 out channels and downscale by a 16x128x128 factor."""
+    is_mask_head_compatible = False
+
+    def __init__(
+            self,
+            cfg: CfgNode,
+            in_channels: int,
+            anchor_strides: AnchorStrides,
+            half_out: bool = False,
+            cat_all_levels: bool = False
+    ):
+        super().__init__(cfg, in_channels, anchor_strides, half_out, cat_all_levels)
+        n_dim = self.n_dim = cfg.INPUT.N_DIM
+        assert self.n_dim == 3
+        assert not half_out
+
+        self.pooler = build_pooler_extra_args(cfg, ROIHeadName.BoundingBox, anchor_strides, in_channels, cat_all_levels)
+
+        start_channels = 32
+        expansion_factor = 2
+        special_ks = (1, 3, 3)
+        normal_ks = (3,) * n_dim
+        special_stride = (1, 2, 2)
+        normal_stride = 2
+
+        from scene_graph_prediction.modeling.backbone.fpn import _StackedBlock
+        conv0 = _StackedBlock(n_dim, in_channels, start_channels, special_ks, stride=1, norm=NormType.Instance, max_out=128)
+        conv1 = _StackedBlock(n_dim, conv0.out_channels, conv0.out_channels * expansion_factor,
+                              special_ks, stride=special_stride, norm=NormType.Instance, max_out=128)
+        conv2 = _StackedBlock(n_dim, conv1.out_channels, conv1.out_channels * expansion_factor,
+                              normal_ks, stride=special_stride, norm=NormType.Instance, max_out=128)
+        conv3 = _StackedBlock(n_dim, conv2.out_channels, conv2.out_channels * expansion_factor,
+                              normal_ks, stride=normal_stride, norm=NormType.Instance, max_out=128)
+        conv4 = _StackedBlock(n_dim, conv3.out_channels, conv3.out_channels * expansion_factor,
+                              normal_ks, stride=normal_stride, norm=NormType.Instance, max_out=128)
+        conv5 = _StackedBlock(n_dim, conv4.out_channels, conv4.out_channels * expansion_factor,
+                              normal_ks, stride=normal_stride, norm=NormType.Instance, max_out=128)
+        final_pooling = torch.nn.AdaptiveMaxPool3d((1, 1, 1))
+        # Final downsample factor: (16, 64, 64)
+        final_plane_res = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION // 64
+        final_plane_res_depth = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION_DEPTH // 16
+        # final_pooling = torch.nn.AdaptiveMaxPool3d((1, final_plane_res, final_plane_res))
+        self.x_convs = nn.Sequential(conv0, conv1, conv2, conv3, conv4, conv5, final_pooling)
+
+        # self.representation_size = conv6.out_channels * final_plane_res**2
+        self.representation_size = conv5.out_channels * final_plane_res ** 2 * final_plane_res_depth
+
+        if cfg.MODEL.ROI_BOX_HEAD.FEATURE_REPRESENTATION_SIZE != self.representation_size:
+            logging.getLogger(__file__).error(
+                f"cfg.MODEL.ROI_BOX_HEAD.FEATURE_REPRESENTATION_SIZE "
+                f"({cfg.MODEL.ROI_BOX_HEAD.FEATURE_REPRESENTATION_SIZE}) is ignored,"
+                f"since it is computed from the pooler's resolution. "
+                f"We're using: {self.representation_size} instead. "
+                f"For compatibility reasons, you need to adjust it in your config."
+            )
+            assert cfg.MODEL.ROI_BOX_HEAD.FEATURE_REPRESENTATION_SIZE == self.representation_size
+
+    def forward_without_pool(self, x: torch.Tensor) -> BoxHeadFeatures:
+        x = self.x_convs(x)
+        # Then just flatten (with a safeguard against completely empty proposals)
+        return x.view(x.shape[0], np.prod(x.shape[1:]))
+
+    def output_size(self) -> tuple[int, ...]:
+        raise RuntimeError("Not compatible with a mask head")
 
 
 def build_feature_extractor(

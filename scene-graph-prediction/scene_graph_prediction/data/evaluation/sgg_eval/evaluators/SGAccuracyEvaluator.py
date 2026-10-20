@@ -40,7 +40,7 @@ class SGPairAccuracyEvaluator(BaseEvaluator):
             image_context.gt_rels, image_context.gt_labels, image_context.gt_boxes
         )
 
-        # For each predicted triplet find all matches in the groundtruth
+        # For each predicted triplet finds all matches in the groundtruth
         pred_to_gt = self._compute_pred_matches(
             gt_triplets,
             pred_triplets,
@@ -54,7 +54,7 @@ class SGPairAccuracyEvaluator(BaseEvaluator):
 
         # ==============================================================================================================
         # Second pass, we check whether bg relations are correctly predicted
-        # This is done in the same way than for class agnostic metric upper bound computation (skip
+        # This is done in the same way as for class agnostic metric upper bound computation
         pred_to_gt = self._compute_pred_matches(
             gt_triplets[:, ::2],
             pred_triplets[:, ::2],
@@ -63,7 +63,7 @@ class SGPairAccuracyEvaluator(BaseEvaluator):
         )
         has_match = np.array([len(e) > 0 for e in pred_to_gt])
 
-        # Predicted as bg and object pair has no match
+        # Predicted as bg and object pair have no match
         bg_correct = np.logical_and(pred_triplets[1] == 0, ~has_match)
 
         # ==============================================================================================================

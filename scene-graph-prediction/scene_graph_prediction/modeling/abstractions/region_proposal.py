@@ -79,12 +79,14 @@ class RPN(torch.nn.Module, ABC, Generic[RPNRawPredictions]):
     def forward(
             self,
             images: ImageList,
-            features: FeatureMaps
+            features: FeatureMaps,
+            precomputations: list[BoxList]
     ) -> RPNRawPredictions:  # FIXME could also be a BoxHeadTargets if we have a one-stage detector
         """
         :param images: Images for which we want to compute the predictions.
         :param features: Features computed from the images that are used for computing the predictions.
                           Each tensor in the list correspond to different feature levels
+        :param precomputations: any precomputations or results computed outside of this framework.
 
         :returns: Typically, but can also return some other stuff:
             anchors: a per-level list of anchors for the batch

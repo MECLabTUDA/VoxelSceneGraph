@@ -56,11 +56,13 @@ class BaseDetector(AbstractDetector, ABC):
     def forward(
             self,
             images: ImageList | list[torch.Tensor],
+            precomputations: list[BoxList],
             targets: list[BoxList] | None = None,
             compute_loss: LossComputationCfg = LossComputationCfg.none()
     ) -> tuple[list[BoxList], LossDict]:
         """
         :param images: images to be processed
+        :param precomputations: any precomputations or results computed outside of this framework.
         :param targets: ground-truth boxes present in the image (optional)
         :param compute_loss: which loss should be computed (even when evaluating).
 
@@ -74,11 +76,11 @@ class BaseDetector(AbstractDetector, ABC):
             # The filtering messes up the prediction ordering if we have a batch size > 1
             # Also it's not really relevant for testing...
             if self.cfg.MODEL.RELATION_ON:
-                proposals, all_losses = self.rel_head_optimized_forward(images, targets, compute_loss)
+                proposals, all_losses = self.rel_head_optimized_forward(images, precomputations, targets, compute_loss)
             else:
-                proposals, all_losses = self.roi_heads_optimized_forward(images, targets, compute_loss)
+                proposals, all_losses = self.roi_heads_optimized_forward(images, precomputations, targets, compute_loss)
         else:
-            proposals, all_losses = self.standard_forward(images, targets, compute_loss)
+            proposals, all_losses = self.standard_forward(images, precomputations, targets, compute_loss)
 
         if targets is not None and not self.training:
             # Add affine from targets (annoying to get it from the image directly)
@@ -91,6 +93,7 @@ class BaseDetector(AbstractDetector, ABC):
     def standard_forward(
             self,
             images: ImageList | list[torch.Tensor],
+            precomputations: list[BoxList],
             targets: list[BoxList] | None = None,
             compute_loss: LossComputationCfg = LossComputationCfg.none()
     ) -> tuple[list[BoxList], LossDict]:
@@ -99,7 +102,9 @@ class BaseDetector(AbstractDetector, ABC):
             raise ValueError("In training mode, targets should be passed")
 
         image_list = ImageList.to_image_list(images, self.n_dim)
-        features, proposals, all_losses = self._prepare_rpn_proposals(image_list, targets, compute_loss)
+        features, proposals, all_losses = self._prepare_rpn_proposals(
+            image_list, precomputations, targets, compute_loss
+        )
 
         proposals, roi_head_losses = self.roi_heads(features, proposals, targets, compute_loss)
         all_losses.update(roi_head_losses)
@@ -109,6 +114,7 @@ class BaseDetector(AbstractDetector, ABC):
     def roi_heads_optimized_forward(
             self,
             images: ImageList | list[torch.Tensor],
+            precomputations: list[BoxList],
             targets: list[BoxList] | None = None,
             compute_loss: LossComputationCfg = LossComputationCfg.none()
     ) -> LossDict:
@@ -136,10 +142,13 @@ class BaseDetector(AbstractDetector, ABC):
         for idx, cur_image in enumerate(images):
             # We need to get the ith image to ImageList with one image and then set the device
             cur_image = cur_image.to(device)
+            cur_precomputation = [precomputations[idx].to(device)]
             cur_target = [targets[idx].to(device)] if targets is not None else None
 
             # We assume that the RPN is not trained with the optimized pipeline
-            features, proposals, _ = self._prepare_rpn_proposals(cur_image, cur_target, compute_loss)
+            features, proposals, _ = self._prepare_rpn_proposals(
+                cur_image, cur_precomputation, cur_target, compute_loss
+            )
 
             box_pre_computations, attr_pre_computations, mask_pre_computations, kp_pre_computations = (
                 self.roi_heads.sample_and_predict_roi_heads(features, proposals, cur_target)
@@ -159,7 +168,7 @@ class BaseDetector(AbstractDetector, ABC):
         # Aggregate intermediate results
         all_proposals = reduce(lambda a, b: a + b, all_proposals)
 
-        def transpose_computations(pre_computations):
+        def transpose_computations(rel_pre_computations):
             return [
                 None
                 if None in comp_list
@@ -168,7 +177,7 @@ class BaseDetector(AbstractDetector, ABC):
                     if isinstance(comp_list[0], torch.Tensor)
                     else reduce(lambda a, b: a + b, comp_list)  # Tuple of list of BoxLists to list of BoxLists
                 )
-                for comp_list in list(zip(*pre_computations))
+                for comp_list in list(zip(*rel_pre_computations))
             ]
 
         all_box_pre_computations = transpose_computations(all_box_pre_computations)
@@ -190,6 +199,7 @@ class BaseDetector(AbstractDetector, ABC):
     def rel_head_optimized_forward(
             self,
             images: ImageList | list[torch.Tensor],
+            precomputations: list[BoxList],
             targets: list[BoxList] | None = None,
             compute_loss: LossComputationCfg = LossComputationCfg.none()
     ) -> tuple[list[BoxList], LossDict]:
@@ -213,10 +223,13 @@ class BaseDetector(AbstractDetector, ABC):
         for idx, cur_image in enumerate(images):
             # We need to get the ith image to ImageList with one image and then set the device
             cur_image = cur_image.to(device)
+            cur_precomputation = [precomputations[idx].to(device)]
             cur_target = [targets[idx].to(device)] if targets is not None else None
 
             # We assume that the RPN is not trained with the optimized pipeline
-            features, proposals, _ = self._prepare_rpn_proposals(cur_image, cur_target, compute_loss)
+            features, proposals, _ = self._prepare_rpn_proposals(
+                cur_image, cur_precomputation, cur_target, compute_loss
+            )
 
             proposals, pre_computations = self.roi_heads.sample_and_predict_relation(
                 features, proposals, cur_target, compute_loss
@@ -245,6 +258,7 @@ class BaseDetector(AbstractDetector, ABC):
     def _prepare_rpn_proposals(
             self,
             image_list: ImageList,
+            precomputations: list[BoxList],
             targets: list[BoxList] | None = None,
             compute_loss: LossComputationCfg = LossComputationCfg.none()
     ) -> tuple[FeatureMaps, BoxHeadTestProposals, LossDict]:
@@ -257,10 +271,10 @@ class BaseDetector(AbstractDetector, ABC):
 
         if not (self.cfg.MODEL.RELATION_ON and self.cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX):
             # Normal computation pipeline
-            raw_rpn_predictions = self.rpn(image_list, features)
+            raw_rpn_predictions = self.rpn(image_list, features, precomputations)
             proposals = self.rpn.post_process_predictions(raw_rpn_predictions, targets=targets)
 
-            # Prevent any RPN to produce a loss when it shouldn't
+            # Prevent any RPN from producing a loss when it shouldn't
             if compute_loss.compute_rpn_loss:
                 rpn_losses.update(self.rpn.loss(raw_rpn_predictions, targets=targets))
 

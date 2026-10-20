@@ -58,22 +58,6 @@ _ResNet101StagesTo4 = tuple(
     StageSpec(index=i, block_count=c, return_features=r)
     for (i, c, r) in ((1, 3, False), (2, 4, False), (3, 23, True))
 )
-# ResNet-50-FPN (including all stages)
-_ResNet50FPNStagesTo5 = tuple(
-    StageSpec(index=i, block_count=c, return_features=r)
-    for (i, c, r) in ((1, 3, True), (2, 4, True), (3, 6, True), (4, 3, True))
-    # for (i, c, r) in ((1, 3, True), (2, 4, True), (3, 6, True))
-)
-# ResNet-101-FPN (including all stages)
-_ResNet101FPNStagesTo5 = tuple(
-    StageSpec(index=i, block_count=c, return_features=r)
-    for (i, c, r) in ((1, 3, True), (2, 4, True), (3, 23, True), (4, 3, True))
-)
-# ResNet-152-FPN (including all stages)
-_ResNet152FPNStagesTo5 = tuple(
-    StageSpec(index=i, block_count=c, return_features=r)
-    for (i, c, r) in ((1, 3, True), (2, 8, True), (3, 36, True), (4, 3, True))
-)
 
 
 class ResNet(Backbone):
@@ -161,18 +145,22 @@ class ResNet(Backbone):
         strides = (1, 4, 4), (2, 8, 8), (4, 16, 16), (8, 32, 32), (16, 64, 64)
         return tuple(stride for stride, stage_name in zip(strides, self.stages) if self.return_features[stage_name])
 
+
 class ResNetHead(torch.nn.Module):
-    def __init__(self,
-                 n_dim: int,
-                 block_module_name: str,
-                 stages: Sequence[StageSpec],
-                 num_groups: int = 1,
-                 width_per_group: int = 64,
-                 stride_in_1x1: bool = True,
-                 stride_init: int | None = None,
-                 res2_out_channels: int = 256,
-                 dilation: int = 1,
-                 dcn_config: dict | None = None):
+    def __init__(
+            self,
+            n_dim: int,
+            block_module_name: str,
+            stages: Sequence[StageSpec],
+            num_groups: int = 1,
+            width_per_group: int = 64,
+            # Apparently, t's better to hav the stride in the 3x3 conv
+            # https://ngc.nvidia.com/catalog/model-scripts/nvidia:resnet_50_v1_5_for_pytorch
+            stride_in_1x1: bool = False,
+            stride_init: int | None = None,
+            res2_out_channels: int = 256,
+            dilation: int = 1,
+            dcn_config: dict | None = None):
         super().__init__()
         assert n_dim in [2, 3]
 
@@ -218,18 +206,19 @@ class ResNetHead(torch.nn.Module):
 
 
 class _Bottleneck(torch.nn.Module):
-    def __init__(self,
-                 in_channels: int,
-                 bottleneck_channels: int,
-                 out_channels: int,
-                 n_dim: int,
-                 num_groups: int,
-                 stride_in_1x1: bool,
-                 stride: int,
-                 dilation: int,
-                 norm_func: Callable,
-                 dcn_config: dict | None
-                 ):
+    def __init__(
+            self,
+            in_channels: int,
+            bottleneck_channels: int,
+            out_channels: int,
+            n_dim: int,
+            num_groups: int,
+            stride_in_1x1: bool,
+            stride: int,
+            dilation: int,
+            norm_func: Callable,
+            dcn_config: dict | None
+    ):
         super().__init__()
 
         assert n_dim in [2, 3]
@@ -307,8 +296,6 @@ class _Bottleneck(torch.nn.Module):
         torch.nn.init.kaiming_uniform_(self.conv3.weight, a=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        identity = x
-
         out = self.conv1(x)
         out = self.bn1(out)
         out = torch.nn.functional.relu_(out)
@@ -322,6 +309,8 @@ class _Bottleneck(torch.nn.Module):
 
         if self.downsample is not None:
             identity = self.downsample(x)
+        else:
+            identity = x
 
         out += identity
         return torch.nn.functional.relu_(out)
@@ -340,30 +329,33 @@ class _BottleneckWithFixedBatchNorm(_Bottleneck):
             dilation: int = 1,
             dcn_config: dict | None = None
     ):
-        super().__init__(in_channels=in_channels,
-                         bottleneck_channels=bottleneck_channels,
-                         out_channels=out_channels,
-                         n_dim=n_dim,
-                         num_groups=num_groups,
-                         stride_in_1x1=stride_in_1x1,
-                         stride=stride,
-                         dilation=dilation,
-                         norm_func=FrozenBatchNorm,
-                         dcn_config=dcn_config
-                         )
+        super().__init__(
+            in_channels=in_channels,
+            bottleneck_channels=bottleneck_channels,
+            out_channels=out_channels,
+            n_dim=n_dim,
+            num_groups=num_groups,
+            stride_in_1x1=stride_in_1x1,
+            stride=stride,
+            dilation=dilation,
+            norm_func=FrozenBatchNorm,
+            dcn_config=dcn_config
+        )
 
 
 class _BottleneckWithGN(_Bottleneck):
-    def __init__(self,
-                 in_channels: int,
-                 bottleneck_channels: int,
-                 out_channels: int,
-                 n_dim: int,
-                 num_groups: int = 1,
-                 stride_in_1x1: bool = True,
-                 stride: int = 1,
-                 dilation: int = 1,
-                 dcn_config: dict | None = None):
+    def __init__(
+            self,
+            in_channels: int,
+            bottleneck_channels: int,
+            out_channels: int,
+            n_dim: int,
+            num_groups: int = 1,
+            stride_in_1x1: bool = True,
+            stride: int = 1,
+            dilation: int = 1,
+            dcn_config: dict | None = None
+    ):
         super().__init__(
             in_channels=in_channels,
             bottleneck_channels=bottleneck_channels,
@@ -414,17 +406,19 @@ class _StemWithGN(_BaseStem):
         super().__init__(cfg, norm_func=build_group_norm)
 
 
-def _build_stage(transformation_module: Type[_BottleneckWithGN] | Type[_BottleneckWithFixedBatchNorm],
-                 in_channels: int,
-                 bottleneck_channels: int,
-                 out_channels: int,
-                 n_dim: int,
-                 block_count: int,
-                 num_groups: int,
-                 stride_in_1x1: bool,
-                 first_stride: int,
-                 dilation: int = 1,
-                 dcn_config: dict | None = None) -> torch.nn.Sequential:
+def _build_stage(
+        transformation_module: Type[_BottleneckWithGN] | Type[_BottleneckWithFixedBatchNorm],
+        in_channels: int,
+        bottleneck_channels: int,
+        out_channels: int,
+        n_dim: int,
+        block_count: int,
+        num_groups: int,
+        stride_in_1x1: bool,
+        first_stride: int,
+        dilation: int = 1,
+        dcn_config: dict | None = None
+) -> torch.nn.Sequential:
     """
     :param transformation_module:
     :param in_channels:
@@ -476,15 +470,9 @@ _STEM_MODULES = Registry({
     "StemWithGN": _StemWithGN,
 })
 
-# FIXME needs to be cleaned
 _STAGE_SPECS = Registry({
     "R-50-C4": _ResNet50StagesTo4,
     "R-50-C5": _ResNet50StagesTo5,
     "R-101-C4": _ResNet101StagesTo4,
     "R-101-C5": _ResNet101StagesTo5,
-    "R-50-FPN": _ResNet50FPNStagesTo5,
-    "R-50-FPN-RETINANET": _ResNet50FPNStagesTo5,
-    "R-101-FPN": _ResNet101FPNStagesTo5,
-    "R-101-FPN-RETINANET": _ResNet101FPNStagesTo5,
-    "R-152-FPN": _ResNet152FPNStagesTo5,
 })

@@ -7,7 +7,6 @@ from typing import Sequence, Generator
 
 import torch
 from torch.utils.data import DataLoader
-from torch.utils.data.sampler import Sampler
 from yacs.config import CfgNode
 
 from scene_graph_prediction.utils.comm import get_world_size
@@ -15,7 +14,7 @@ from .collate_batch import BatchCollator
 from .datasets import DatasetStatistics, Dataset, Split, SGGEvaluableDataset, ConcatDataset
 from .paths_catalog import DatasetCatalog
 from .samplers import DistributedSampler, GroupedBatchSampler, IterationBasedBatchSampler, \
-    KnowledgeGuidedObjectSampler, KnowledgeGuidedRelationSampler
+    KnowledgeGuidedObjectSampler, KnowledgeGuidedRelationSampler, SceneAwareBatchSampler
 from .transforms import build_transforms, Compose, ToTensor
 from .utils import save_labels
 
@@ -245,6 +244,7 @@ def _build_batch_data_sampler(
         cfg.DATALOADER.ASPECT_RATIO_GROUPING,
         cfg.DATALOADER.KNOWLEDGE_GUIDED_BOX_GROUPING,
         cfg.DATALOADER.KNOWLEDGE_GUIDED_RELATION_GROUPING,
+        cfg.DATALOADER.SCENE_AWARE_BATCHING,
     ])
     if n_sampling_options > 1:
         raise ValueError(f"At most one sampling method can be selected at a time. "
@@ -256,6 +256,7 @@ def _build_batch_data_sampler(
         raise ValueError("Knowledge-guided samplers cannot be used with distributed training.")
 
     # Use the correct combination of samplers
+    # `not shuffle` means not training
     if n_sampling_options == 0 or cfg.DATALOADER.ASPECT_RATIO_GROUPING or not shuffle:
         # Either no grouping, or ASPECT_RATIO_GROUPING, or we're actually testing (i.e. no shuffle)
         # First prepare the sampler
@@ -288,11 +289,21 @@ def _build_batch_data_sampler(
             start_iter,
             cfg.DATALOADER.STRICT_SAMPLING
         )
-    return KnowledgeGuidedRelationSampler(
+    if cfg.DATALOADER.KNOWLEDGE_GUIDED_RELATION_GROUPING:
+        return KnowledgeGuidedRelationSampler(
+            cfg,
+            images_per_batch,
+            cfg.DATALOADER.SAMPLES_PER_GROUP,
+            num_iters,
+            start_iter,
+            cfg.DATALOADER.STRICT_SAMPLING
+        )
+    return SceneAwareBatchSampler(
         cfg,
+        torch.utils.data.sampler.RandomSampler(dataset),
         images_per_batch,
-        cfg.DATALOADER.SAMPLES_PER_GROUP,
-        num_iters,
-        start_iter,
-        cfg.DATALOADER.STRICT_SAMPLING
+        drop_last=False,
+        start_batch=start_iter,
+        num_batches=num_iters,
+        ignore_unique_objects=cfg.DATALOADER.SCENE_AWARE_BATCHING_IGNORE_UNIQUE
     )

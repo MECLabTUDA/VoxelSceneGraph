@@ -49,7 +49,7 @@ class SGPairMeanAccuracyEvaluator(BaseEvaluator):
             image_context.gt_rels, image_context.gt_labels, image_context.gt_boxes
         )
 
-        # For each predicted triplet find all matches in the groundtruth
+        # For each predicted triplet find all matches in the ground truth
         pred_to_gt = self._compute_pred_matches(
             gt_triplets,
             pred_triplets,

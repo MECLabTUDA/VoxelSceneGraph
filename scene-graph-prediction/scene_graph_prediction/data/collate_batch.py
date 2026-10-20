@@ -13,8 +13,8 @@ class BatchCollator:
         self.size_divisible = size_divisible
         self.n_dim = n_dim
 
-    def __call__(self, batch: list) -> tuple[ImageList, tuple[BoxList, ...], tuple[int, ...]]:
+    def __call__(self, batch: list) -> tuple[ImageList, tuple[BoxList, ...], tuple[BoxList, ...], tuple[int, ...]]:
         # tuple[tuple[torch.Tensor, ...], tuple[BoxList, ...], tuple[int, ...]]
-        images, targets, img_ids = list(zip(*batch))
+        images, precomputations, targets, img_ids = list(zip(*batch))
         images = ImageList.to_image_list(images, self.n_dim, size_divisible=self.size_divisible)
-        return images, targets, img_ids
+        return images, precomputations, targets, img_ids

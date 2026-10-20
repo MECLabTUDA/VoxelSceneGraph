@@ -267,7 +267,7 @@ def run_train(
 
     # Add a safeguard for if somehow cfg.TEST.VAL_PERIOD > cfg.SOLVER.MAX_ITER
     update_bar = tqdm(total=(min(cfg.TEST.VAL_PERIOD, max_iter) if cfg.TEST.DO_VAL else max_iter) - start_iter)
-    for iteration, (images, targets, ids) in enumerate(train_data_loader, start_iter):
+    for iteration, (images, precomputations, targets, ids) in enumerate(train_data_loader, start_iter):
         model.train()
         iteration += 1
 
@@ -288,10 +288,11 @@ def run_train(
         if not cfg.MODEL.OPTIMIZED_ROI_HEADS_PIPELINE:
             # Defer the device-move to the model
             images = images.to(device)
+            precomputations = [precomputation.to(device) for precomputation in precomputations]
             targets = [target.to(device) for target in targets]
 
         try:
-            _, loss_dict = model(images, targets, compute_loss=compute_loss)
+            _, loss_dict = model(images, precomputations, targets, compute_loss=compute_loss)
 
             # Filter out any information that might have been returned (see doc for LossDict)
             # noinspection PyTypeChecker

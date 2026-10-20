@@ -4,6 +4,7 @@ import torch
 
 from scene_graph_prediction.data import get_dataset_statistics
 from scene_graph_prediction.data.datasets import DatasetStatistics
+from scene_graph_prediction.data.evaluation import SGGEvaluationMode
 from scene_graph_prediction.modeling.registries import *
 from scene_graph_prediction.modeling.utils import cat
 from ._models.motifs import LSTMContext, FrequencyBias
@@ -11,12 +12,198 @@ from ._models.motifs_with_attribute import AttributeLSTMContext
 from ._models.msg_passing import IMPContext
 from ._models.transformer import TransformerContext
 from ._models.vctree import VCTreeLSTMContext
+from ._utils.motifs import to_onehot, encode_box_info
 from ._utils.relation import layer_init
 from ...abstractions.attribute_head import AttributeLogits
 from ...abstractions.box_head import BoxHeadFeatures, ClassLogits
 from ...abstractions.loss import LossDict
 from ...abstractions.relation_head import ROIRelationPredictor, RelationHeadFeatures, RelationLogits, \
     RelationHeadProposals
+from ...utils.build_layers import build_fc
+
+
+@ROI_RELATION_PREDICTOR.register("OnlyBiasPredictor")
+class OnlyBiasPredictor(ROIRelationPredictor):
+    """No weights being trained. We only use the statistical bias for prediction."""
+
+    def __init__(self, cfg: CfgNode, in_channels: int):
+        super().__init__(cfg, in_channels)
+        assert cfg.MODEL.ROI_RELATION_HEAD.PREDICT_USE_BIAS
+        assert cfg.MODEL.ROI_RELATION_HEAD.DISABLE_RECLASSIFICATION
+        statistics = get_dataset_statistics(cfg)
+        self.num_obj_cls = cfg.INPUT.N_OBJ_CLASSES
+        self.freq_bias = FrequencyBias(statistics)
+        self.mode = SGGEvaluationMode.build(cfg)
+
+    def forward(
+            self,
+            proposals: RelationHeadProposals,
+            rel_pair_idxs: list[torch.Tensor],
+            _: BoxHeadFeatures,
+            __: RelationHeadFeatures
+    ) -> tuple[list[ClassLogits], list[RelationLogits], list[AttributeLogits] | None, list]:
+        num_objs = [len(b) for b in proposals]
+        num_rels = [r.shape[0] for r in rel_pair_idxs]
+        # Sanity check on the number of images
+        assert len(num_rels) == len(num_objs)
+
+        # Assemble object predictions and dists for all modes (from object detector label predictions)
+        if self.mode == SGGEvaluationMode.PredicateClassification:
+            # noinspection PyTypeChecker
+            obj_predictions = [proposal.LABELS for proposal in proposals]
+        else:
+            # noinspection PyTypeChecker
+            obj_predictions = [proposal.PRED_LABELS for proposal in proposals]
+        obj_dists = [to_onehot(pred, self.num_obj_cls) for pred in obj_predictions]
+
+        # Compute frequency bias
+        pair_predictions = []
+        for pair_idx, obj_pred in zip(rel_pair_idxs, obj_predictions):
+            pair_predictions.append(torch.stack((obj_pred[pair_idx[:, 0]], obj_pred[pair_idx[:, 1]]), dim=1))
+        pair_pred = cat(pair_predictions, dim=0)
+        rel_dists = self.freq_bias.index_with_labels(pair_pred.long())
+
+        # Split relation logits (from batch to #rels/img)
+        rel_dists = rel_dists.split(num_rels, dim=0)
+        # noinspection PyTypeChecker
+        return obj_dists, rel_dists, None, [None] * len(proposals)
+
+    def supports_attribute_refinement(self):
+        return False
+
+
+@ROI_RELATION_PREDICTOR.register("NoRefinementPredictor")
+class NoRefinementPredictor(ROIRelationPredictor):
+    """No object or attribute refinement. Only predict relations given union features with a fully connected layer."""
+
+    def __init__(self, cfg: CfgNode, in_channels: int):
+        super().__init__(cfg, in_channels)
+        assert cfg.MODEL.ROI_RELATION_HEAD.DISABLE_RECLASSIFICATION
+        self.num_obj_cls = cfg.INPUT.N_OBJ_CLASSES
+        self.use_bias = cfg.MODEL.ROI_RELATION_HEAD.PREDICT_USE_BIAS
+        self.mode = SGGEvaluationMode.build(cfg)
+
+        self.predictor = build_fc(cfg.MODEL.ROI_BOX_HEAD.FEATURE_REPRESENTATION_SIZE, cfg.INPUT.N_REL_CLASSES)
+
+        # Freq
+        if self.use_bias:
+            statistics = get_dataset_statistics(cfg)
+            self.freq_bias = FrequencyBias(statistics)
+
+    def forward(
+            self,
+            proposals: RelationHeadProposals,
+            rel_pair_idxs: list[torch.Tensor],
+            _: BoxHeadFeatures,
+            union_features: RelationHeadFeatures
+    ) -> tuple[list[ClassLogits], list[RelationLogits], list[AttributeLogits] | None, list]:
+
+        # Compute relation logits
+        rel_dists = self.predictor(union_features)
+
+        num_objs = [len(b) for b in proposals]
+        num_rels = [r.shape[0] for r in rel_pair_idxs]
+        # Sanity check on the number of images
+        assert len(num_rels) == len(num_objs)
+
+        # Assemble object predictions and dists for all modes (from object detector label predictions)
+        if self.mode == SGGEvaluationMode.PredicateClassification:
+            # noinspection PyTypeChecker
+            obj_predictions = [proposal.LABELS for proposal in proposals]
+        else:
+            # noinspection PyTypeChecker
+            obj_predictions = [proposal.PRED_LABELS for proposal in proposals]
+        obj_dists = [to_onehot(pred, self.num_obj_cls) for pred in obj_predictions]
+
+        # Add frequency bias if enabled
+        if self.use_bias:
+            pair_predictions = []
+            for pair_idx, obj_pred in zip(rel_pair_idxs, obj_predictions):
+                pair_predictions.append(torch.stack((obj_pred[pair_idx[:, 0]], obj_pred[pair_idx[:, 1]]), dim=1))
+            pair_pred = cat(pair_predictions, dim=0)
+            rel_dists += self.freq_bias.index_with_labels(pair_pred.long())
+
+        # Split relation logits (from batch to #rels/img)
+        rel_dists = rel_dists.split(num_rels, dim=0)
+        # noinspection PyTypeChecker
+        return obj_dists, rel_dists, None, [None] * len(proposals)
+
+    def supports_attribute_refinement(self):
+        return False
+
+
+# TODO factorize
+@ROI_RELATION_PREDICTOR.register("NoRefinementPredictorWithObjectEmbedding")
+class NoRefinementPredictorWithObjectEmbedding(ROIRelationPredictor):
+    """No object or attribute refinement. Only predict relations given union features with a fully connected layer."""
+
+    def __init__(self, cfg: CfgNode, in_channels: int):
+        super().__init__(cfg, in_channels)
+        assert cfg.MODEL.ROI_RELATION_HEAD.DISABLE_RECLASSIFICATION
+        self.n_dim = cfg.INPUT.N_DIM
+        self.num_obj_cls = cfg.INPUT.N_OBJ_CLASSES
+        self.use_bias = cfg.MODEL.ROI_RELATION_HEAD.PREDICT_USE_BIAS
+        self.mode = SGGEvaluationMode.build(cfg)
+
+        self.predictor = build_fc(cfg.MODEL.ROI_BOX_HEAD.FEATURE_REPRESENTATION_SIZE + (4 * self.n_dim + 1) * 2, cfg.INPUT.N_REL_CLASSES)
+
+        # Freq
+        if self.use_bias:
+            statistics = get_dataset_statistics(cfg)
+            self.freq_bias = FrequencyBias(statistics)
+
+    def forward(
+            self,
+            proposals: RelationHeadProposals,
+            rel_pair_idxs: list[torch.Tensor],
+            _: BoxHeadFeatures,
+            union_features: RelationHeadFeatures
+    ) -> tuple[list[ClassLogits], list[RelationLogits], list[AttributeLogits] | None, list]:
+
+        # Prepare subject and object embeddings
+        subj_embeddings = encode_box_info([
+            proposal[rel_pair[:, 0]]
+            for proposal, rel_pair in zip(proposals, rel_pair_idxs)
+        ])
+        obj_embeddings = encode_box_info([
+            proposal[rel_pair[:, 1]]
+            for proposal, rel_pair in zip(proposals, rel_pair_idxs)
+        ])
+
+        full_features = torch.cat((union_features, subj_embeddings, obj_embeddings), dim=1)
+
+        # Compute relation logits
+        rel_dists = self.predictor(full_features)
+
+        num_objs = [len(b) for b in proposals]
+        num_rels = [r.shape[0] for r in rel_pair_idxs]
+        # Sanity check on the number of images
+        assert len(num_rels) == len(num_objs)
+
+        # Assemble object predictions and dists for all modes (from object detector label predictions)
+        if self.mode == SGGEvaluationMode.PredicateClassification:
+            # noinspection PyTypeChecker
+            obj_predictions = [proposal.LABELS for proposal in proposals]
+        else:
+            # noinspection PyTypeChecker
+            obj_predictions = [proposal.PRED_LABELS for proposal in proposals]
+        obj_dists = [to_onehot(pred, self.num_obj_cls) for pred in obj_predictions]
+
+        # Add frequency bias if enabled
+        if self.use_bias:
+            pair_predictions = []
+            for pair_idx, obj_pred in zip(rel_pair_idxs, obj_predictions):
+                pair_predictions.append(torch.stack((obj_pred[pair_idx[:, 0]], obj_pred[pair_idx[:, 1]]), dim=1))
+            pair_pred = cat(pair_predictions, dim=0)
+            rel_dists += self.freq_bias.index_with_labels(pair_pred.long())
+
+        # Split relation logits (from batch to #rels/img)
+        rel_dists = rel_dists.split(num_rels, dim=0)
+        # noinspection PyTypeChecker
+        return obj_dists, rel_dists, None, [None] * len(proposals)
+
+    def supports_attribute_refinement(self):
+        return False
 
 
 # noinspection DuplicatedCode
@@ -137,7 +324,7 @@ class TransformerPredictor(ROIRelationPredictor):
         return obj_dists, rel_dists, att_dists, [None] * len(proposals)
 
     def supports_attribute_refinement(self):
-        return True
+        return False
 
 
 @ROI_RELATION_PREDICTOR.register("IMPPredictor")

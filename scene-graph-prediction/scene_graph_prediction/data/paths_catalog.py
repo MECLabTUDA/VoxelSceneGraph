@@ -6,7 +6,7 @@ from typing import Type
 
 from yacs.config import CfgNode
 
-from .datasets import Dataset, RelationDetectionDataset, Split, FixedSpliter
+from .datasets import Dataset, RelationDetectionDataset, Split, FixedSpliter, UnannotatedDataset
 from .transforms import Compose
 
 
@@ -16,79 +16,93 @@ class DatasetCatalog:
     CACHE_DIR = os.path.join(DATASETS_DIR, ".cache")
 
     DATASETS = {
-        "INSTANCE2022": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/boxlists",
-            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/split.json"),
+        "INST2022": {
+            "img_dir": DATASETS_DIR + "sgg_annotation_transformed/INSTANCE2022/images",
+            "annotation_dir": DATASETS_DIR + "sgg_annotation_transformed/INSTANCE2022/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "sgg_annotation_transformed/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "sgg_annotation_transformed/INSTANCE2022/split.json"),
+            _DATASET_TYPE_KEY: RelationDetectionDataset
+        },
+        "MZ": {
+            "img_dir": DATASETS_DIR + "sgg_annotation_transformed/MZ/images",
+            "annotation_dir": DATASETS_DIR + "sgg_annotation_transformed/MZ/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "sgg_annotation_transformed/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "sgg_annotation_transformed/MZ/split.json"),
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "BHSD": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/BHSD/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/BHSD/boxlists",
-            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/BHSD/split.json"),
+            "img_dir": DATASETS_DIR + "sgg_annotation_transformed/BHSD/images",
+            "annotation_dir": DATASETS_DIR + "sgg_annotation_transformed/BHSD/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "sgg_annotation_transformed/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "sgg_annotation_transformed/BHSD/split.json"),
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "CQ500": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/CQ500/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/CQ500/boxlists",
-            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/CQ500/split.json"),
+            "img_dir": DATASETS_DIR + "sgg_annotation_transformed/CQ500/images",
+            "annotation_dir": DATASETS_DIR + "sgg_annotation_transformed/CQ500/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "sgg_annotation_transformed/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "sgg_annotation_transformed/CQ500/split.json"),
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "PhysioNet": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/PhysioNet/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/PhysioNet/boxlists",
-            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/PhysioNet/split.json"),
+            "img_dir": DATASETS_DIR + "sgg_annotation_transformed/Iraq/images",
+            "annotation_dir": DATASETS_DIR + "sgg_annotation_transformed/Iraq/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "sgg_annotation_transformed/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "sgg_annotation_transformed/Iraq/split.json"),
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "HemSeg200": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/HemSeg200/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/HemSeg200/boxlists",
-            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/HemSeg200/split.json"),
+            "img_dir": DATASETS_DIR + "sgg_annotation_transformed/HemSeg200/images",
+            "annotation_dir": DATASETS_DIR + "sgg_annotation_transformed/HemSeg200/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "sgg_annotation_transformed/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "sgg_annotation_transformed/HemSeg200/split.json"),
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
 
-        "INSTANCE2022_rel": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/boxlists",
-            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/INSTANCE2022/split.json"),
+        "INST_rel": {
+            "img_dir": DATASETS_DIR + "sgg_annotation_transformed/INSTANCE2022/images",
+            "annotation_dir": DATASETS_DIR + "sgg_annotation_transformed/INSTANCE2022/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "sgg_annotation_transformed/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "sgg_annotation_transformed/INSTANCE2022/split.json"),
             "keep_only_with_rel": True,
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
+        "MZ_rel": {
+            "img_dir": DATASETS_DIR + "sgg_annotation_transformed/MZ/images",
+            "annotation_dir": DATASETS_DIR + "sgg_annotation_transformed/MZ/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "sgg_annotation_transformed/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "sgg_annotation_transformed/MZ/split.json"),
+            _DATASET_TYPE_KEY: RelationDetectionDataset
+        },
         "BHSD_rel": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/BHSD/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/BHSD/boxlists",
-            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/BHSD/split.json"),
+            "img_dir": DATASETS_DIR + "sgg_annotation_transformed/BHSD/images",
+            "annotation_dir": DATASETS_DIR + "sgg_annotation_transformed/BHSD/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "sgg_annotation_transformed/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "sgg_annotation_transformed/BHSD/split.json"),
             "keep_only_with_rel": True,
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "CQ500_rel": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/CQ500/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/CQ500/boxlists",
-            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/CQ500/split.json"),
+            "img_dir": DATASETS_DIR + "sgg_annotation_transformed/CQ500/images",
+            "annotation_dir": DATASETS_DIR + "sgg_annotation_transformed/CQ500/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "sgg_annotation_transformed/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "sgg_annotation_transformed/CQ500/split.json"),
             "keep_only_with_rel": True,
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "PhysioNet_rel": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/PhysioNet/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/PhysioNet/boxlists",
-            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/PhysioNet/split.json"),
+            "img_dir": DATASETS_DIR + "sgg_annotation_transformed/Iraq/images",
+            "annotation_dir": DATASETS_DIR + "sgg_annotation_transformed/Iraq/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "sgg_annotation_transformed/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "sgg_annotation_transformed/Iraq/split.json"),
             "keep_only_with_rel": True,
             _DATASET_TYPE_KEY: RelationDetectionDataset
         },
         "HemSeg200_rel": {
-            "img_dir": DATASETS_DIR + "BleedScene3D/normalized/HemSeg200/images",
-            "annotation_dir": DATASETS_DIR + "BleedScene3D/normalized/HemSeg200/boxlists",
-            "knowledge_graph_file": DATASETS_DIR + "BleedScene3D/knowledge_graph.json",
-            "spliter": FixedSpliter(DATASETS_DIR + "BleedScene3D/normalized/HemSeg200/split.json"),
+            "img_dir": DATASETS_DIR + "sgg_annotation_transformed/HemSeg200/images",
+            "annotation_dir": DATASETS_DIR + "sgg_annotation_transformed/HemSeg200/boxlists",
+            "knowledge_graph_file": DATASETS_DIR + "sgg_annotation_transformed/knowledge_graph.json",
+            "spliter": FixedSpliter(DATASETS_DIR + "sgg_annotation_transformed/HemSeg200/split.json"),
             "keep_only_with_rel": True,
             _DATASET_TYPE_KEY: RelationDetectionDataset
         }
@@ -111,3 +125,13 @@ class DatasetCatalog:
         # Linter not smart enough
         # noinspection PyCallingNonCallable
         return dataset_type(cfg, DatasetCatalog.DATASETS_DIR, transforms, split, **dataset_args)
+
+    @staticmethod
+    def get_unannotated_dataset(
+            cfg: CfgNode,
+            transforms: Compose,
+            img_dir: str,
+            knowledge_graph_file: str,
+            precomputations_dir: str | None = None
+    ) -> UnannotatedDataset:
+        return UnannotatedDataset(cfg, transforms, img_dir, knowledge_graph_file, precomputations_dir)

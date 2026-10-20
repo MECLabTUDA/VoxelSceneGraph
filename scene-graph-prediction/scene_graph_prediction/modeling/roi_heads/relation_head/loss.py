@@ -66,7 +66,7 @@ class RelationLossComputation(torch.nn.Module):
 
         loss_refine_obj = torch.mean(torch.stack(losses_fg))
 
-        # Relation classification refinement loss
+        # Relation classification loss
         relation_logits = cat(relation_logits, dim=0)
         rel_labels = cat(rel_labels, dim=0)
 
@@ -95,12 +95,11 @@ class RelationLossComputation(torch.nn.Module):
         # If we only sample images with no relations, then we cannot stack
         if losses_rel_fg:
             # Note: we do not use torch.mean as we do not always have examples from each foreground class
-            losses_rel_fg = torch.sum(torch.stack(losses_rel_fg)) * self.positive_weight / self.num_fg_classes
+            losses_rel_fg = torch.sum(torch.stack(losses_rel_fg)) / self.num_fg_classes
         else:
             losses_rel_fg = 0.
 
-        loss_relation = loss_rel_fp * (1 - self.positive_weight) + losses_rel_fg
-
+        loss_relation = loss_rel_fp * (1 - self.positive_weight) + losses_rel_fg * self.positive_weight
 
         return loss_relation, loss_refine_obj, None
 

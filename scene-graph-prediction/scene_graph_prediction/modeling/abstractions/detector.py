@@ -40,7 +40,7 @@ class AbstractDetector(torch.nn.Module, ABC):
         Note: if we ever need individual constructor prototypes, we'll have to replace the dict with a registry.
         """
         super().__init__()
-        self.n_dim = cfg.INPUT.N_DIM
+        self.n_dim: int = cfg.INPUT.N_DIM
         self.cfg = cfg
         self.backbone = backbone
         self.rpn = rpn
@@ -57,11 +57,13 @@ class AbstractDetector(torch.nn.Module, ABC):
     def forward(
             self,
             images: ImageList | list[torch.Tensor],
+            precomputations: list[BoxList],
             targets: list[BoxList] | None = None,
             compute_loss: LossComputationCfg = LossComputationCfg.none()
     ) -> tuple[list[BoxList], LossDict]:
         """
         :param images: images to be processed
+        :param precomputations: any precomputations or results computed outside of this framework.
         :param targets: ground-truth boxes present in the image (optional)
         :param compute_loss: which loss should be computed (even when evaluating).
 

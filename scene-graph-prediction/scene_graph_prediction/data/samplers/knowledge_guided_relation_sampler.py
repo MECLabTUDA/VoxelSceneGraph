@@ -57,7 +57,7 @@ class KnowledgeGuidedRelationSampler(KnowledgeGuidedAbstractSampler):
         return group_to_ids
 
     def batch_collation(self, batch: list) -> tuple[ImageList, tuple[BoxList, ...], tuple[int, ...]]:
-        images, targets, img_ids = super().batch_collation(batch)
+        images, precomputations, targets, img_ids = list(zip(*batch))
 
         if self.strict_sampling:
             # Mark relevant foreground relations as ignored
@@ -65,4 +65,4 @@ class KnowledgeGuidedRelationSampler(KnowledgeGuidedAbstractSampler):
                 # Note: we don't have to make a copy
                 target.RELATIONS[(target.RELATIONS > 0) & (target.RELATIONS != self.current_group + 1)] = -1
 
-        return images, targets, img_ids
+        return images, precomputations, targets, img_ids

@@ -169,7 +169,7 @@ class RelationSampling:
         )
 
         # Remove pairs with no overlap between subject and object
-        if not self.use_gt_box and self.require_overlap:
+        if self.require_overlap:
             rel_possibility &= BoxListOps.iou(proposal, proposal).gt(0)
 
         # Note: see REQUIRE_REL_IN_TRAIN
@@ -182,14 +182,11 @@ class RelationSampling:
                 else proposal.LABELS
 
             rel_pair_idxs = torch.nonzero(rel_possibility)
-            # Note: to learn sub/ob ordering, also allow pairs where the reverse ordering is found in the groundtruth
-            # Note: careful about order of sub and ob in idxs returned by torch.non_zero
+            # Note: since rel_possibility is a symmetric matrix,
+            # this code already handles both (subj, obj) and (obj, subj) pairs
             impossible_idxs = self.fg_matrix[
                                   labels[rel_pair_idxs[:, 0]].long() - 1,
                                   labels[rel_pair_idxs[:, 1]].long() - 1
-                              ] + self.fg_matrix[
-                                  labels[rel_pair_idxs[:, 1]].long() - 1,
-                                  labels[rel_pair_idxs[:, 0]].long() - 1
                               ] == 0
             rel_possibility[rel_pair_idxs[impossible_idxs][:, 0], rel_pair_idxs[impossible_idxs][:, 1]] = 0
 

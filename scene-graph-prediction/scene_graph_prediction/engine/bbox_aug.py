@@ -16,6 +16,7 @@ _SIZE_T = int | tuple[int, ...]
 def im_detect_bbox_aug(
         model: AbstractDetector,
         images: ImageList,
+        precomputations: list[BoxList],
         compute_loss: LossComputationCfg,
         device: torch.device,
         targets: list[BoxList] | None
@@ -30,14 +31,14 @@ def im_detect_bbox_aug(
     boxlists_ts: list[list[BoxList]] = [[] for _ in range(len(images))]
     # Compute detections for the original image (identity transform)
     # Note: we only compute losses for this case
-    boxlists_i, losses = model(images.to(device), targets, compute_loss=compute_loss)
+    boxlists_i, losses = model(images.to(device), precomputations, targets, compute_loss=compute_loss)
     for idx, boxlist_t in enumerate(boxlists_i):
         # The first one (func call) is identity transform, no need to resize the boxlist
         boxlists_ts[idx].append(boxlist_t)
 
     # Perform detection on the horizontally flipped image
     if cfg.TEST.BBOX_AUG.H_FLIP:
-        boxlists_hf = _im_detect_bbox_h_flip(model, images, device, targets)
+        boxlists_hf = _im_detect_bbox_h_flip(model, images, precomputations, device, targets)
         for idx, boxlist_t in enumerate(boxlists_hf):
             # Resize the boxlist as the first one
             boxlists_ts[idx].append(BoxListOps.resize(boxlist_t, boxlists_ts[idx][0].size))
@@ -68,6 +69,7 @@ def im_detect_bbox_aug(
 def _im_detect_bbox_h_flip(
         model: AbstractDetector,
         images: ImageList,
+        precomputations: list[BoxList],
         device: torch.device,
         targets: list[BoxList] | None
 ) -> list[BoxList]:
@@ -79,10 +81,11 @@ def _im_detect_bbox_h_flip(
     # H-flip images in the ImageList and build it again
     images = [func.hflip(image) for image in images.tensors]
     images = ImageList.to_image_list(images, cfg.INPUT.N_DIM, size_divisible=cfg.DATALOADER.SIZE_DIVISIBILITY)
+    precomputations = [BoxListOps.flip(box, BoxList.FlipDim.WIDTH) for box in precomputations]
     # H-flip targets if available
     if targets:
         targets = [BoxListOps.flip(box, BoxList.FlipDim.WIDTH) for box in targets]
-    boxlists, _ = model(images.to(device), targets)
+    boxlists, _ = model(images.to(device), precomputations, targets)
 
     # Invert the detections computed on the flipped image
     return [BoxListOps.flip(boxlist, BoxList.FlipDim.WIDTH) for boxlist in boxlists]

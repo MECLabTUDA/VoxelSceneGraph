@@ -96,7 +96,7 @@ class Pooler(torch.nn.Module, ABC):
         super().__init__()
         self.n_dim = n_dim
         self.output_size = output_size
-        self.cat_all_levels = cat_all_levels
+        self.cat_all_levels = cat_all_levels and len(scales) > 1
         self.sampling_ratio = sampling_ratio
         self.roi_align_samplers = [self._build_roi_layer(dim_scales) for dim_scales in scales]
 

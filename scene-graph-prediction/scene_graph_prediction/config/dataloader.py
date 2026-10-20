@@ -36,6 +36,12 @@ DATALOADER.KNOWLEDGE_GUIDED_BOX_GROUPING = False
 # - cfg.INPUT.N_REL_CLASSES > 2
 DATALOADER.KNOWLEDGE_GUIDED_RELATION_GROUPING = False
 
+# Rather than setting a batch size for a number of images
+# We set a batch size for the total number of objects in the batched scenes
+# Note: incompatible with other special samplers
+DATALOADER.SCENE_AWARE_BATCHING = False
+DATALOADER.SCENE_AWARE_BATCHING_IGNORE_UNIQUE = False
+
 # -------------------------------------------------------------------------------------------------------------------- #
 # Has to be used with either KNOWLEDGE_GUIDED_BOX_GROUPING or KNOWLEDGE_GUIDED_RELATION_GROUPING.
 # If True, we only train on objects/relation for the selected group rather than on the entire image annotation.

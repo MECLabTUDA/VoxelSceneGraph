@@ -3,14 +3,31 @@ from functools import reduce
 import numpy as np
 
 from .BaseEvaluator import BaseEvaluator
-from .abstractions import SGGResults, ImageContext
-
+from .abstractions import MetaContext, ImageContext, SGGResults
+from ...utils import SGGEvaluationMode
 
 class SGRecallEvaluator(BaseEvaluator):
-    """Traditional Recall, implement based on: https://github.com/rowanz/neural-motifs."""
+    """
+    Traditional Recall, implement based on: https://github.com/rowanz/neural-motifs.
+    If class_idx is None: then it is the classic Recall.
+    If class_idx is > 0: then it is the classic Recall for the specified class.
+    """
 
-    metric_name = "Recall"
-    short_metric_name = "R"
+    @property
+    def metric_name(self) -> str:
+        if self._class_idx is None:
+            return "Recall"
+        return f"Recall{self._class_idx}"
+
+    @property
+    def short_metric_name(self) -> str:
+        if self._class_idx is None:
+            return "R"
+        return f"R{self._class_idx}"
+
+    def __init__(self, mode: SGGEvaluationMode, meta: MetaContext, class_idx: int | None = None):
+        super().__init__(mode, meta)
+        self._class_idx = class_idx
 
     def evaluate(self, image_context: ImageContext, results: SGGResults):
         """
@@ -19,8 +36,13 @@ class SGRecallEvaluator(BaseEvaluator):
         :param results: object that will store the results and will be used to summarize the results.
         """
         # Recall- and pair-acc-based metrics do not need to run on images with no relations
-        if len(image_context.gt_rels) == 0:
-            return
+        if self._class_idx is None:
+            if len(image_context.gt_rels) == 0:
+                return
+        else:
+            # No relation for specified class
+            if not np.any(image_context.gt_rels[:, -1] == self._class_idx):
+                return
 
         # Format predictions to triplet
         pred_rels = np.column_stack((image_context.pred_rel_idxs, 1 + image_context.pred_rel_scores[:, 1:].argmax(1)))
@@ -59,7 +81,22 @@ class SGRecallEvaluator(BaseEvaluator):
                 res[k].append(0.)
                 continue
 
-            # The following code is copied from Neural-MOTIFS
-            match = reduce(np.union1d, pred_to_gt[:k])  # Computes the set of all matches to gt
-            rec = len(match) / image_context.gt_rels.shape[0]
+            pred_to_gt_k = pred_to_gt[:k]
+            if self._class_idx is not None:
+                # We only want to consider predicted relations for the specified class within the top K,
+                # without messing with the ordering
+                fg_rel_mask = pred_rels[:, -1] == self._class_idx
+                pred_to_gt_k = [v for v, b in zip(pred_to_gt_k, fg_rel_mask[:k]) if b]
+            if len(pred_to_gt_k) == 0:
+                # FIXME Since we rely on key ordering for the final print, we need to add this key if we're skipping
+                if k not in res.keys():
+                    res[k] = []
+                continue
+
+            match = reduce(np.union1d, pred_to_gt_k)  # Computes the set of all matches to gt
+            if self._class_idx is None:
+                num_get_rels = image_context.gt_rels.shape[0]
+            else:
+                num_get_rels = np.sum(image_context.gt_rels[:, -1] == self._class_idx)
+            rec = len(match) / num_get_rels
             res[k].append(rec)

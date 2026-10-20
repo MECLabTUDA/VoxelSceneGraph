@@ -18,7 +18,7 @@ from scene_graph_prediction.structures import BoxList, FieldExtractor, BoxListOp
 
 class AbstractTransform(torch.nn.Module, ABC):
     @abstractmethod
-    def forward(self, image: Any, target: BoxList) -> tuple[Any, BoxList]:
+    def forward(self, image: Any, precomputation: BoxList, target: BoxList) -> tuple[Any, BoxList, BoxList]:
         raise NotImplementedError
 
     @staticmethod
@@ -38,10 +38,10 @@ class Compose(torch.nn.Module):
         super().__init__()
         self.transforms = transforms
 
-    def forward(self, image: Any, target: BoxList) -> tuple[torch.Tensor, BoxList]:
+    def forward(self, image: Any, precomputation: BoxList, target: BoxList) -> tuple[torch.Tensor, BoxList, BoxList]:
         for transform in self.transforms:
-            image, target = transform(image, target)
-        return image, target
+            image, precomputation, target = transform(image, precomputation, target)
+        return image, precomputation, target
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(\n\t" + "\n\t".join(repr(t) for t in self.transforms) + "\n)"
@@ -59,23 +59,27 @@ class ResizeImage2D(AbstractTransform):
         self.min_size = min_size
         self.max_size = max_size
 
-    def forward(self, image: Image | torch.Tensor, target: BoxList) -> tuple[Image | torch.Tensor, BoxList]:
+    def forward(
+            self, image: Image | torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[Image | torch.Tensor, BoxList, BoxList]:
         if isinstance(image, Image):
             w, h = image.size
             h, w, do_op = self._get_size((h, w))
         elif isinstance(image, torch.Tensor):
             # Ignore channel dim
+            # noinspection PyTypeChecker
             h, w, do_op = self._get_size(image.size()[1:])
         else:
             raise RuntimeError
 
         if not do_op:
-            return image, target
+            return image, precomputation, target
 
         # PIL Images are also supported
         image = func.resize(image, [h, w])
+        precomputation = BoxListOps.resize(target, (h, w))
         target = BoxListOps.resize(target, (h, w))
-        return image, target
+        return image, precomputation, target
 
     @staticmethod
     def build(cfg: _CfgNode, is_train: bool) -> ResizeImage2D:
@@ -112,7 +116,9 @@ class ResizeTensor(AbstractTransform):
         super().__init__()
         self.size = size
 
-    def forward(self, image: torch.Tensor, target: BoxList) -> tuple[torch.Tensor, BoxList]:
+    def forward(
+            self, image: torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[torch.Tensor, BoxList, BoxList]:
         image = torch.nn.functional.interpolate(
             image,
             size=self.size,
@@ -120,7 +126,8 @@ class ResizeTensor(AbstractTransform):
             align_corners=False
         )
         target = BoxListOps.resize(target, self.size)
-        return image, target
+        precomputation = BoxListOps.resize(precomputation, self.size)
+        return image, precomputation, target
 
     @staticmethod
     def build(cfg: _CfgNode, _: bool) -> ResizeTensor:
@@ -137,12 +144,15 @@ class RandomHorizontalFlip(AbstractTransform):
         super().__init__()
         self.prob = prob
 
-    def forward(self, image: Image | torch.Tensor, target: BoxList) -> tuple[Image | torch.Tensor, BoxList]:
+    def forward(
+            self, image: Image | torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[Image | torch.Tensor, BoxList, BoxList]:
         if random.random() < self.prob:
             # PIL Images are also supported
             image = func.hflip(image)  # Equivalent to torch.flip(image, dims=(image.dim() - 1,))
+            precomputation = BoxListOps.flip(precomputation, BoxList.FlipDim.WIDTH)
             target = BoxListOps.flip(target, BoxList.FlipDim.WIDTH)
-        return image, target
+        return image, precomputation, target
 
     @staticmethod
     def build(cfg: _CfgNode, is_train: bool) -> RandomHorizontalFlip:
@@ -159,12 +169,15 @@ class RandomVerticalFlip(AbstractTransform):
         super().__init__()
         self.prob = prob
 
-    def forward(self, image: Image | torch.Tensor, target: BoxList) -> tuple[Image | torch.Tensor, BoxList]:
+    def forward(
+            self, image: Image | torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[Image | torch.Tensor, BoxList, BoxList]:
         if random.random() < self.prob:
             # PIL Images are also supported
             image = func.vflip(image)  # Equivalent to torch.flip(image, dims=(image.dim() - 2,))
+            precomputation = BoxListOps.flip(target, BoxList.FlipDim.HEIGHT)
             target = BoxListOps.flip(target, BoxList.FlipDim.HEIGHT)
-        return image, target
+        return image, precomputation, target
 
     @staticmethod
     def build(cfg: _CfgNode, is_train: bool) -> RandomVerticalFlip:
@@ -181,11 +194,14 @@ class RandomDepthFlip(AbstractTransform):
         super().__init__()
         self.prob = prob
 
-    def forward(self, image: torch.Tensor, target: BoxList) -> tuple[torch.Tensor, BoxList]:
+    def forward(
+            self, image: torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[torch.Tensor, BoxList, BoxList]:
         if random.random() < self.prob:
             image = torch.flip(image, dims=(image.dim() - 3,))
+            precomputation = BoxListOps.flip(precomputation, BoxList.FlipDim.DEPTH)
             target = BoxListOps.flip(target, BoxList.FlipDim.DEPTH)
-        return image, target
+        return image, precomputation, target
 
     @staticmethod
     def build(cfg: _CfgNode, is_train: bool) -> RandomDepthFlip:
@@ -199,8 +215,10 @@ class ColorJitter(torchvision.transforms.ColorJitter, AbstractTransform):
     """
 
     # noinspection PyMethodOverriding
-    def forward(self, image: Image | torch.Tensor, target: BoxList) -> tuple[Image | torch.Tensor, BoxList]:
-        return super()(image), target
+    def forward(
+            self, image: Image | torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[Image | torch.Tensor, BoxList, BoxList]:
+        return super()(image), precomputation, target
 
     @staticmethod
     def build(cfg: _CfgNode, is_train: bool) -> ColorJitter:
@@ -222,10 +240,12 @@ class ColorJitter(torchvision.transforms.ColorJitter, AbstractTransform):
 class ToTensor(AbstractTransform):
     """Cast whatever to Tensor."""
 
-    def forward(self, image: Image | torch.Tensor | np.ndarray, target: BoxList) -> tuple[torch.Tensor, BoxList]:
+    def forward(
+            self, image: Image | torch.Tensor | np.ndarray, precomputation: BoxList, target: BoxList
+    ) -> tuple[torch.Tensor, BoxList, BoxList]:
         if isinstance(image, torch.Tensor):
-            return image, target  # no op
-        return func.to_tensor(image), target
+            return image, precomputation, target  # no op
+        return func.to_tensor(image), precomputation, target
 
     @staticmethod
     def build(_: _CfgNode, __: bool) -> ToTensor:
@@ -250,14 +270,16 @@ class Normalize(AbstractTransform):
         self.std = std
 
     # noinspection PyMethodOverriding
-    def forward(self, image: torch.Tensor, target: BoxList) -> tuple[torch.Tensor, BoxList]:
+    def forward(
+            self, image: torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[torch.Tensor, BoxList, BoxList]:
         assert image.shape[0] == len(self.mean)
         image = copy.deepcopy(image)
         for c, (m, s) in enumerate(zip(self.mean, self.std)):
             image[c] -= m
             image[c] /= s
 
-        return image, target
+        return image, precomputation, target
 
     @staticmethod
     def build(cfg: _CfgNode, _: bool) -> Normalize:
@@ -273,9 +295,10 @@ class ClipAndRescale(AbstractTransform):
         self.min_val = min_val
         self.max_val = max_val
 
-    def forward(self, image: torch.Tensor, target: BoxList) -> tuple[torch.Tensor, BoxList]:
-        # noinspection PyTypeChecker
-        return torch.clip(image, self.min_val, self.max_val) / (self.max_val - self.min_val), target
+    def forward(
+            self, image: torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[torch.Tensor, BoxList, BoxList]:
+        return torch.clip(image, self.min_val, self.max_val) / (self.max_val - self.min_val), precomputation, target
 
     @staticmethod
     def build(cfg: _CfgNode, _: bool) -> ClipAndRescale:
@@ -285,8 +308,10 @@ class ClipAndRescale(AbstractTransform):
 class AddChannelDim(AbstractTransform):
     """Add a dummy channel dim for grayscale images e.g. reshape head CT from (d, h, w) to (1, d, h, w)."""
 
-    def forward(self, image: torch.Tensor, target: BoxList) -> tuple[torch.Tensor, BoxList]:
-        return image[None], target
+    def forward(
+            self, image: torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[torch.Tensor, BoxList, BoxList]:
+        return image[None], precomputation, target
 
     @staticmethod
     def build(_: _CfgNode, __: bool) -> AddChannelDim:
@@ -301,7 +326,7 @@ class BoundingBoxPerturbation(AbstractTransform):
     Note: should always be called after transforms that compute the boxes from the segmentation e.g. RandomAffine.
     """
 
-    def __init__(self, max_shift: int | tuple[int, ...], n_dim: int):
+    def __init__(self, max_shift: int | tuple[int, ...], n_dim: int, is_train: bool):
         """
         :param max_shift: either a different max shift for each dim or a single shift that will be used for all.
         """
@@ -311,20 +336,30 @@ class BoundingBoxPerturbation(AbstractTransform):
         assert all(shift >= 0 for shift in max_shift), max_shift
         self.max_shift = max_shift
         self.n_dim = n_dim
+        self.is_train = is_train
 
-    def forward(self, image: torch.Tensor, target: BoxList) -> tuple[torch.Tensor, BoxList]:
+    def forward(
+            self, image: torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[torch.Tensor, BoxList, BoxList]:
+        if not self.is_train:
+            return image, precomputation, target
+
         assert target.n_dim == self.n_dim
+        assert precomputation.n_dim == self.n_dim
+        precomputation = precomputation.copy_with_all_fields()
         target = target.copy_with_all_fields()
         # Compute separate shifts for each dim for each bb
         shifts = [torch.randint(low=-shift, high=shift + 1, size=(len(target), 1)) for shift in self.max_shift]
         stacked_shifts = torch.hstack(shifts * 2)  # Shift each end bb by as much as each start
+        precomputation.boxes += stacked_shifts
         target.boxes += stacked_shifts
+        precomputation = BoxListOps.clip_to_image(precomputation, remove_empty=True)
         target = BoxListOps.clip_to_image(target, remove_empty=True)
-        return image, target
+        return image, precomputation, target
 
     @staticmethod
-    def build(cfg: _CfgNode, train: bool) -> BoundingBoxPerturbation:
-        return BoundingBoxPerturbation(max_shift=cfg.INPUT.MAX_BB_SHIFT if train else 0, n_dim=cfg.INPUT.N_DIM)
+    def build(cfg: _CfgNode, is_train: bool) -> BoundingBoxPerturbation:
+        return BoundingBoxPerturbation(max_shift=cfg.INPUT.MAX_BB_SHIFT, n_dim=cfg.INPUT.N_DIM, is_train=is_train)
 
 
 class RandomAffine(AbstractTransform):
@@ -357,9 +392,12 @@ class RandomAffine(AbstractTransform):
         self.output_segmentation = output_segmentation
         self.output_masks = output_masks
 
-    def forward(self, image: torch.Tensor, target: BoxList) -> tuple[torch.Tensor, BoxList]:
+    def forward(
+            self, image: torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[torch.Tensor, BoxList, BoxList]:
         """
         :param image: An image tensor with a channel dim and no batch dim.
+        :param precomputation: A BoxList containing any precomputations done outside of this framework.
         :param target: a BoxList containing the annotation.
         :return: The transformed image+target.
         """
@@ -368,16 +406,34 @@ class RandomAffine(AbstractTransform):
             # We need to make a shallow copy to protect against fields removal
             # Also we need to make sure that only the correct mask fields are present
             not_transformed_target = target.copy_with_all_fields()
-            if self.output_segmentation:
-                not_transformed_target.SEGMENTATION = FieldExtractor.segmentation(target)
-            else:
-                not_transformed_target.del_field(BoxList.AnnotationField.SEGMENTATION)
-            if self.output_masks:
-                not_transformed_target.MASKS = FieldExtractor.masks(target)
-            else:
-                not_transformed_target.del_field(BoxList.AnnotationField.MASKS)
-            not_transformed_target.del_field(BoxList.AnnotationField.LABELMAP)  # Not needed anymore
-            return image, not_transformed_target
+            try:
+                if self.output_segmentation:
+                    not_transformed_target.SEGMENTATION = FieldExtractor.segmentation(target)
+                else:
+                    not_transformed_target.del_field(BoxList.AnnotationField.SEGMENTATION)
+                if self.output_masks:
+                    not_transformed_target.MASKS = FieldExtractor.masks(target)
+                else:
+                    not_transformed_target.del_field(BoxList.AnnotationField.MASKS)
+                not_transformed_target.del_field(BoxList.AnnotationField.LABELMAP)  # Not needed anymore
+            except ValueError:
+                # Target may be empty
+                ...
+            not_transformed_precomputation = precomputation.copy_with_all_fields()
+            try:
+                if self.output_segmentation:
+                    not_transformed_precomputation.PRED_SEGMENTATION = FieldExtractor.segmentation(precomputation)
+                else:
+                    not_transformed_precomputation.del_field(BoxList.AnnotationField.SEGMENTATION)
+                if self.output_masks:
+                    not_transformed_precomputation.PRED_MASKS = FieldExtractor.masks(precomputation)
+                else:
+                    not_transformed_precomputation.del_field(BoxList.AnnotationField.MASKS)
+                not_transformed_precomputation.del_field(BoxList.PredictionField.PRED_LABELMAP)  # Not needed anymore
+            except ValueError:
+                # Precomputation may be empty
+                ...
+            return image, not_transformed_precomputation, not_transformed_target
 
         assert image.dim() == self.n_dim + 1
 
@@ -394,8 +450,18 @@ class RandomAffine(AbstractTransform):
 
         # Create batch dim for image and remove it after the transform
         transformed_image = torch.nn.functional.grid_sample(image[None], grid, align_corners=False)[0]
-
-        return transformed_image, BoxListOps.affine_transformation(
+        # Note: for now, we keep the precomputed masks as a labelmap to spare memory
+        #       we only output the segmentation if required
+        transformed_precomputation = BoxListOps.affine_transformation(
+            precomputation,
+            translate=translate,
+            scale=scale,
+            rotate=rotate,
+            output_labelmap=True,
+            output_segmentation=self.output_segmentation,
+            output_masks=False,
+        )
+        transformed_target = BoxListOps.affine_transformation(
             target,
             translate=translate,
             scale=scale,
@@ -405,17 +471,14 @@ class RandomAffine(AbstractTransform):
             output_masks=self.output_masks
         )
 
+        return transformed_image, transformed_precomputation, transformed_target
+
     @staticmethod
     def build(cfg: _CfgNode, is_train: bool) -> RandomAffine:
         n_dim = cfg.INPUT.N_DIM
-        if is_train:
-            max_translate = cfg.INPUT.AFFINE_MAX_TRANSLATE
-            scale_range = cfg.INPUT.AFFINE_SCALE_RANGE
-            max_rotate = cfg.INPUT.AFFINE_MAX_ROTATE
-        else:
-            max_translate = (0,)
-            scale_range = ((1., 1.),)
-            max_rotate = (0.,) if n_dim == 2 else (0.,) * 3
+        max_translate = cfg.INPUT.AFFINE_MAX_TRANSLATE
+        scale_range = cfg.INPUT.AFFINE_SCALE_RANGE
+        max_rotate = cfg.INPUT.AFFINE_MAX_ROTATE
 
         if len(max_translate) == 1:
             max_translate *= n_dim
@@ -430,7 +493,7 @@ class RandomAffine(AbstractTransform):
             max_rotate,
             is_train,
             output_segmentation=cfg.MODEL.REQUIRE_SEMANTIC_SEGMENTATION,
-            output_masks=cfg.MODEL.MASK_ON,
+            output_masks=cfg.MODEL.MASK_ON or cfg.MODEL.REQUIRE_MASKS,
         )
 
 
@@ -453,9 +516,12 @@ class RandomAffineNoMasks(AbstractTransform):
         self.scale_range = scale_range
         self.is_train = is_train
 
-    def forward(self, image: torch.Tensor, target: BoxList) -> tuple[torch.Tensor, BoxList]:
+    def forward(
+            self, image: torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[torch.Tensor, BoxList, BoxList]:
         """
         :param image: An image tensor with a channel dim and no batch dim.
+        :param precomputation: A BoxList containing any precomputations done outside of this framework.
         :param target: a BoxList containing the annotation.
         :return: The transformed image+target.
         """
@@ -463,7 +529,7 @@ class RandomAffineNoMasks(AbstractTransform):
             # Optimize to (almost) no-op
             # We need to make a shallow copy to protect against fields removal
             # Also we need to make sure that only the correct mask fields are present
-            return image, target.copy_with_all_fields()
+            return image, precomputation.copy_with_all_fields(), target.copy_with_all_fields()
 
         assert image.dim() == self.n_dim + 1
 
@@ -479,18 +545,18 @@ class RandomAffineNoMasks(AbstractTransform):
 
         # Create batch dim for image and remove it after the transform
         transformed_image = torch.nn.functional.grid_sample(image[None], grid, align_corners=False)[0]
+        transformed_precomputation = BoxListOps.affine_transformation_no_masks(
+            precomputation, translate=translate, scale=scale
+        )
+        transformed_target = BoxListOps.affine_transformation_no_masks(target, translate=translate, scale=scale)
 
-        return transformed_image, BoxListOps.affine_transformation_no_masks(target, translate=translate, scale=scale)
+        return transformed_image, transformed_precomputation, transformed_target
 
     @staticmethod
     def build(cfg: _CfgNode, is_train: bool) -> RandomAffineNoMasks:
         n_dim = cfg.INPUT.N_DIM
-        if is_train:
-            max_translate = cfg.INPUT.AFFINE_MAX_TRANSLATE
-            scale_range = cfg.INPUT.AFFINE_SCALE_RANGE
-        else:
-            max_translate = (0,)
-            scale_range = ((1., 1.),)
+        max_translate = cfg.INPUT.AFFINE_MAX_TRANSLATE
+        scale_range = cfg.INPUT.AFFINE_SCALE_RANGE
 
         if len(max_translate) == 1:
             max_translate *= n_dim
@@ -507,32 +573,34 @@ class ShrinkBoxes(AbstractTransform):
     can sometimes speed up the convergence of the regression head.
     """
 
-    def __init__(self, scaling_factor: float):
+    def __init__(self, scaling_factor: float, is_train: bool):
         super().__init__()
         assert 0 < scaling_factor <= 1.
         self.scaling_factor = scaling_factor
+        self.is_train = is_train
 
-    def forward(self, image: torch.Tensor, target: BoxList) -> tuple[torch.Tensor, BoxList]:
+    def forward(
+            self, image: torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[torch.Tensor, BoxList, BoxList]:
         """
         :param image: An image tensor with a channel dim and no batch dim.
+        :param precomputation: A BoxList containing any precomputations done outside of this framework.
         :param target: a BoxList containing the annotation.
         :return: The transformed image+target.
         """
-        if abs(1. - self.scaling_factor) < 1e-3:
+        if not self.is_train or abs(1. - self.scaling_factor) < 1e-3:
             # Optimize to (almost) no-op
             # We need to make a shallow copy to protect against fields removal
             # Also we need to make sure that only the correct mask fields are present
-            return image, target.copy_with_all_fields()
-        return image, BoxListOps.affine_transformation_no_masks(target, scale=(self.scaling_factor,))
+            return image, precomputation.copy_with_all_fields(), target.copy_with_all_fields()
+        transformed_precomputation = BoxListOps.affine_transformation_no_masks(precomputation,
+                                                                               scale=(self.scaling_factor,))
+        transformed_targets = BoxListOps.affine_transformation_no_masks(target, scale=(self.scaling_factor,))
+        return image, transformed_precomputation, transformed_targets
 
     @staticmethod
     def build(cfg: _CfgNode, is_train: bool) -> ShrinkBoxes:
-        if is_train:
-            scaling_factor = cfg.INPUT.BOX_SHRINKING_FACTOR
-        else:
-            scaling_factor = 1.
-
-        return ShrinkBoxes(scaling_factor)
+        return ShrinkBoxes(cfg.INPUT.BOX_SHRINKING_FACTOR, is_train=is_train)
 
 
 class PrepareMasks(AbstractTransform):
@@ -543,7 +611,9 @@ class PrepareMasks(AbstractTransform):
         self.output_segmentation = output_segmentation
         self.output_masks = output_masks
 
-    def forward(self, image: torch.Tensor, target: BoxList) -> tuple[torch.Tensor, BoxList]:
+    def forward(
+            self, image: torch.Tensor, precomputation: BoxList, target: BoxList
+    ) -> tuple[torch.Tensor, BoxList, BoxList]:
         if self.output_masks:
             if not target.has_field(BoxList.AnnotationField.MASKS):
                 target.MASKS = FieldExtractor.masks(target)
@@ -557,7 +627,7 @@ class PrepareMasks(AbstractTransform):
             target.del_field(target.AnnotationField.SEGMENTATION)
 
         target.del_field(BoxList.AnnotationField.LABELMAP)
-        return image, target
+        return image, precomputation, target
 
     @staticmethod
     def build(cfg: _CfgNode, _: bool) -> PrepareMasks:
