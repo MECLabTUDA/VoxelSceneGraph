@@ -11,7 +11,7 @@ imaging, with a focus on Intracranial Hemorrhage (ICH).
 
 New to the project? Here’s how to get started quickly 👇
 
-### 🗂️ 1. Download the Data
+### 🗂️ 1. Download the Data (BleedScene3D)
 
 Our annotated dataset **BleedScene3D** is openly available
 on [Kaggle](https://www.kaggle.com/datasets/sannera/bleedscene3d). It includes **574 annotated volumes** from multiple
