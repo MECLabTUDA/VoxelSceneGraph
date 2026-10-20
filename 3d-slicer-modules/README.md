@@ -1,6 +1,6 @@
 # 3D Slicer Modules
 
-## AnnotationOverview
+## Scene Graph Annotation
 
 Currently our only module, it is designed to make the segmentation of a large cohort much easier.
 In particular, we aimed at making data I/O as simple as possible. 
@@ -30,10 +30,9 @@ Currently, our module is not available in the extension manager. So, we need to 
 That's it! Our module is now added to the list.
 ![module_added.png](images/module_added.png)
 
-**Note:** 3D Slicer version 5.6 or above is required.
-**Note:** the `sqlite-utils` will automatically be installed on 3D Slicer's Python interpreter. 
-This is not an issue unless, you're sitting behind a proxy (causes a timeout where Slicer is unresponsive).
-It this case, please install this library yourself.
+**Note:** 3D Slicer version 5.10 or above is required.
+**Note:** the required Python libraries will automatically be installed on 3D Slicer's Python interpreter. 
+You will be prompted to enter any proxy information (if any).
 **Note:** 3D Slicer does not make a copy of the code that it imports. So any change in the code here will affect the in-app behavior.
 
 ### Preparing for Annotation
@@ -42,24 +41,37 @@ First, we need to set up the SQLite database and a new study. You won't have to 
 Here is the folder structure for our example:
 ```
 pwd/
+├─ annotation.db
 ├─ BHSD/
 │  ├─ images/
-│  ├─ segmentations/
+│  ├─ images_preview/
+│  ├─ pred/
+│  ├─ psgg/
+│  ├─ reports/
+│  ├─ knowledge_graph.json
 ```
 
-`pwd` is our current working directory, where we have a folder for the `BHSD` dataset, with two subfolders for images and future segmentations.
-`segmentations` can be empty or have existing masks (e.g. pre-segmentations produced by a Deep Learning model).
+Here we have:
+- `pwd`: our current working directory
+- `annotation.db`: the database file containing the annotation progress. It will be created in the next step.
+- `BHSD`: the folder with the dataset, that we wish to annotate. Multiple dataset folders may coexist.
+- `images`: the folder with Nifti images to annotate.
+- `images_preview` (optional): if the images have such a high resolution that they are slow to load, you may generate low resolution (preview) images with `study_prep_preview.py`. 
+- `pred` (optional): the folder with AI pre-segmentations. If present, they will be used to initialize Scene Graphs in the following steps.
+- `psgg`: the folder where the SceneGraphs will be stored. It will be created automatically.
+- `reports` (optional): if you have PDF (clinical/radiological) reports available, you can store them here. There is a shortcut in our module to open the corresponding report for each case, names just have to match, e.g. `case_001.nii.gz` and `case_001.pdf`.
+- `knowledge_graph.json`: your knowledge graph for your dataset, see the documentation for the `scene_graph_api_library` [here](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/scene-graph-api).
 
 **Step one:** we create a database file. For instance:
 ```bash
-sgann_database_rebuild -d my_database.sql
+sgann_database_rebuild -d annotation.db
 ```
 
 **Note:** this operation might fail if your destination is on a network drive. In this case, first do everything locally and then move all files it to the network drive.
 
 **Step two:** create a new study. For more information about the different options, please read the help message. Here is what we did to annotate one of our datasets:
 ```bash
-sgann_study_add -d my_database.sql --name BHSD --image-folder BHSD/images --label-folder BHSD/segmentations --segments VentricleSystem Midline ICH --last-segment-can-repeat --window-center 50 --window-width 100
+sgann_study_add -d annotation.db --name BHSD --knowledge-graph BHSD/knowledge_graph.json
 ```
 A study id will be displayed, it will be useful for later. If you forgot it, you can run the `sgann_study_list` script.
 
@@ -75,7 +87,7 @@ Supporting true instance segmentation is a work in progress.
 
 **Step three:** automatically detect all images present in the folders we just defined:
 ```bash
-sgann_study_progress_update -d my_database.sql --study-id 1 --progress-new 0 --lost-folder BHSD/lost
+sgann_study_progress_update -d annotation.db --study-id 1 --progress-new 0 --lost-folder BHSD/lost
 ```
 
 A few comments:
@@ -83,17 +95,21 @@ A few comments:
 - Since we track the annotation progress, we need to set the progress of any new image detected. Check the help message to see what the values mean.
 - The script might find a segmentation mask with no matching image. Instead of deleting it, we move it to the lost folder.
 
-## Using our AnnotationOverview Module
+**Note:** If you are lazy like me, you can use the `create_study.py` Python script to do this all at once. Just update a few values.
+
+## Using our Scene Graph Annotation Module
 
 If you find the previous instructions tedious, I do too. But we only have to do it once for each cohort, and then we can forget about it.
 Also if you're working with doctors, then no worries. They don't need to know about any of the previous stuff.
 
-**Last step:** select our `AnnotationOverview` module in 3D Slicer. In the `General Configuration` panel, paste the absolute path to the database file. 
+**Last step:** select our `Scene Graph Annotation` module in 3D Slicer. In the `General Configuration` panel, paste the absolute path to the database file. 
 Then type your name in the box underneath and click `Load studies`. If you did not have any error pop-up, then that's it!
 
 **Note:** after a successful connection, these two parameters are saved and automatically loaded again if you re-open Slicer.
 
-## Overview of the AnnotationOverview Module
+## Overview of the Scene Graph Annotation Module
+
+**WARNING**: this section is deprecated, as we have implemented a new UI for annotating Scene Graphs directly from 3D Slicer.
 
 ![AnnotationOverview.png](images/AnnotationOverview.png)
 

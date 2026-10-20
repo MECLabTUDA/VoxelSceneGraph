@@ -17,6 +17,7 @@ limitations under the License.
 
 from setuptools import setup
 
+# TODO update this
 setup(
     name="scene-graph-api",
     description="API library for Voxel Scene Graph",

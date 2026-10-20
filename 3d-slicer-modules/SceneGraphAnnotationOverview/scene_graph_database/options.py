@@ -10,7 +10,7 @@ import sqlite3
 @dataclass
 class Options:
     # Path to the local database
-    _DB_STRING = "test.db"
+    _DB_STRING = "database.db"
     _db: Database | None = None
 
     @staticmethod

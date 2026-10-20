@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from typing import Iterable
 
 from .options import Options
@@ -20,14 +21,7 @@ def init_tables():
         CREATE TABLE IF NOT EXISTS {STUDY_TABLE} (
             id integer PRIMARY KEY,
             name text NOT NULL,
-            img_folder text NOT NULL,
-            label_folder text NOT NULL,
-            segments text NOT NULL,
-            last_segment_can_repeat boolean NOT NULL,
-            window_width integer,
-            window_center integer
-                CHECK((window_width IS NULL and window_center IS NULL) OR 
-                      (window_width IS NOT NULL and window_center IS NOT NULL))
+            knowledge_graph_path text NOT NULL
         );
         CREATE TABLE IF NOT EXISTS {PROGRESS_TABLE} (
             study_id integer,
@@ -38,7 +32,6 @@ def init_tables():
                 CHECK(progress >= {min(AnnotationState).value})
                 CHECK(progress <= {max(AnnotationState).value}),
             when_ text NOT NULL,
-            comment text NOT NULL,
             FOREIGN KEY (study_id) REFERENCES {STUDY_TABLE} (id),
             PRIMARY KEY (study_id, patient_name)
         );
@@ -76,11 +69,12 @@ def progress_add_to_study(study_id: int, progresses: dict[str, AnnotationProgres
         return
 
     db = Options.get_db()
-    # upsert_all somehow not working...
+    # Note: does only update and not insert...
     db[PROGRESS_TABLE].insert_all([
         {"study_id": study_id, "patient_name": patient_name, **progress.dict()}
         for patient_name, progress in progresses.items()
     ], pk=("study_id", "patient_name"))
+
 
 
 def progress_update_to_study(study_id: int, progresses: dict[str, AnnotationProgress]):
@@ -89,7 +83,7 @@ def progress_update_to_study(study_id: int, progresses: dict[str, AnnotationProg
         return
 
     db = Options.get_db()
-    # upsert_all somehow not working...
+    # Note: does only update and not insert...
     db[PROGRESS_TABLE].upsert_all([
         {"study_id": study_id, "patient_name": patient_name, **progress.dict()}
         for patient_name, progress in progresses.items()
@@ -135,7 +129,8 @@ def progress_update_from_patients_found(study_id: int, patient_names: Iterable[s
     progress_delete_from_study(study_id, *list(db_names.difference(input_names)))
     progress_add_to_study(
         study_id,
-        {name: AnnotationProgress(INIT_READER, AnnotationState.EMPTY, "") for name in input_names.difference(db_names)}
+        {name: AnnotationProgress(INIT_READER, AnnotationState.EMPTY, datetime.now())
+         for name in input_names.difference(db_names)}
     )
 
 
@@ -166,18 +161,12 @@ def study_get(study_id: int, fetch_progress: bool = False) -> Study | None:
     return study
 
 
-def study_add(study: Study, patient_names: list[str] | None = None):
+def study_add(study: Study):
     """Add a study to the database."""
     db = Options.get_db()
     table = db[STUDY_TABLE]
     table.insert(study.dict())
     study.id = table.last_pk
-
-    if patient_names:
-        progress_add_to_study(
-            study.id,
-            {name: AnnotationProgress(INIT_READER, AnnotationState.EMPTY, "") for name in patient_names}
-        )
 
 
 def study_id_delete(*study_ids: int):

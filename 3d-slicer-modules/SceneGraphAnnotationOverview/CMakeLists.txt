@@ -1,5 +1,5 @@
 #-----------------------------------------------------------------------------
-set(MODULE_NAME AnnotationOverview)
+set(MODULE_NAME SceneGraphAnnotationOverview)
 
 #-----------------------------------------------------------------------------
 set(MODULE_PYTHON_SCRIPTS

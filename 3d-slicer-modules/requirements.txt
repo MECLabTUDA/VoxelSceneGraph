@@ -3,3 +3,8 @@ click-logging
 nibabel
 numpy
 sqlite-utils
+referencing
+jsonpointer
+jsonschema
+connected-components-3d
+nibabel

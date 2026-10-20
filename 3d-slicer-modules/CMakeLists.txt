@@ -20,7 +20,6 @@ include(${Slicer_USE_FILE})
 #-----------------------------------------------------------------------------
 # Extension modules
 add_subdirectory(AnnotationOverview)
-add_subdirectory(test)
 ## NEXT_MODULE
 
 #-----------------------------------------------------------------------------
