@@ -16,8 +16,6 @@ New to the project? Here’s how to get started quickly 👇
 Our annotated dataset **BleedScene3D** is openly available
 on [Kaggle](https://www.kaggle.com/datasets/sannera/bleedscene3d). It includes **574 annotated volumes** from multiple
 open datasets with harmonized scene graph annotations.
-> **Note:** The dataset will be made public upon acceptance of our IEEE TMI submission. Until then, you can still
-> explore the API and tools locally.
 
 ### 🧩 2. Load our Scene Graphs with Python
 
