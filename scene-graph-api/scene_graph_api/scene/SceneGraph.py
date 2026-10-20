@@ -62,8 +62,7 @@ class SceneGraph(SceneGraphComponent):
     _rel_key = "relations"
     _labelmap_key = "labelmap"
     _image_level_annotation = "image"  # Image level annotation
-    _obj_cls_common_annotation = "all_objects"  # Attributes/keypoints shared across all objects classes
-    _rel_cls_common_annotation = "all_relations"  # Attributes/keypoints shared across all relation rules
+    _comment_key = "comment"
     _knowledge_graph_hash_key = "hash"
 
     def __init__(
@@ -79,21 +78,17 @@ class SceneGraph(SceneGraphComponent):
             object_labelmap: np.ndarray,
             image_level_attributes: list[Attribute] | None = None,
             image_level_keypoints: list[Keypoint] | None = None,
-            obj_common_attributes: list[Attribute] | None = None,
-            obj_common_keypoints: list[Keypoint] | None = None,
-            rel_common_attributes: list[Attribute] | None = None,
-            rel_common_keypoints: list[Keypoint] | None = None,
+            comment: str = "",
     ):
         """Note: the labelmap/affine are expected to be depth-first."""
         self.knowledge_graph = graph
         self.image_affine = image_affine
         self.image_header = image_header
+        self.comment = comment
+
+        # Image-level annotation
         self.image = Object(1, 1, "Background",
                             attributes=image_level_attributes, keypoints=image_level_keypoints)
-        self.obj_common = Object(1, 1, "ObjCommon",
-                                 attributes=obj_common_attributes, keypoints=obj_common_keypoints)
-        self.rel_common = Object(1, 1, "RelCommon",
-                                 attributes=rel_common_attributes, keypoints=rel_common_keypoints)
 
         # BBs and segmentations in the format {obj_clss_id: [objs]}
         # Also useful for grouping object by class id
@@ -124,6 +119,7 @@ class SceneGraph(SceneGraphComponent):
         objects = [BoundingBox.from_json(obj_dict) for obj_dict in json_dict[cls._bb_key]]
         relations = [Relation.from_json(obj_dict) for obj_dict in json_dict[cls._rel_key]]
         labelmap_str = json_dict[cls._labelmap_key]
+        comment = json_dict.get(cls._comment_key, "")
 
         try:
             # Convert string back to nifti image
@@ -148,16 +144,6 @@ class SceneGraph(SceneGraphComponent):
         else:
             image_level_annotation = Object(1, 1, "Background", [], [])
 
-        if cls._obj_cls_common_annotation in json_dict:
-            obj_common = Object.from_json(json_dict[cls._obj_cls_common_annotation])
-        else:
-            obj_common = Object(1, 1, "ObjCommon", [], [])
-
-        if cls._rel_cls_common_annotation in json_dict:
-            rel_common = Object.from_json(json_dict[cls._rel_cls_common_annotation])
-        else:
-            rel_common = Object(1, 1, "RelCommon", [], [])
-
         return cls(
             knowledge_graph,
             nifti_img.affine,
@@ -167,13 +153,11 @@ class SceneGraph(SceneGraphComponent):
             np.asarray(nifti_img.get_fdata()).round().astype(np.uint8),  # In case there is some compression loss
             image_level_attributes=image_level_annotation.attributes,
             image_level_keypoints=image_level_annotation.keypoints,
-            obj_common_attributes=obj_common.attributes,
-            obj_common_keypoints=obj_common.keypoints,
-            rel_common_attributes=rel_common.attributes,
-            rel_common_keypoints=rel_common.keypoints,
+            comment=comment,
         )
 
     def to_json(self) -> dict:
+        # noinspection PyTypeChecker
         object_labelmap = NiftiImageWrapper(
             nib.Nifti1Image(self.object_labelmap, self.image_affine, self.image_header),
             True  # Always assume to be depth-first
@@ -182,11 +166,10 @@ class SceneGraph(SceneGraphComponent):
             self._bb_key: [bb.to_json() for obj_list in self._bb_by_class_id.values() for bb in obj_list],
             self._rel_key: [rel.to_json() for rel_list in self.relations_by_rule_id.values() for rel in rel_list],
             self._image_level_annotation: self.image.to_json(),
-            self._obj_cls_common_annotation: self.obj_common.to_json(),
-            self._rel_cls_common_annotation: self.rel_common.to_json(),
             self._knowledge_graph_hash_key: self.knowledge_graph.hash,
             # The labelmap is converted to bytes, gzipped and finally encoded to str
             self._labelmap_key: object_labelmap.to_str(),
+            self._comment_key: self.comment,
         }
 
     @classmethod
@@ -199,22 +182,33 @@ class SceneGraph(SceneGraphComponent):
                 cls._rel_key: {"type": "array", "items": {"$ref": Relation.schema_name()}},
                 cls._labelmap_key: {"type": "string"},
                 cls._image_level_annotation: {"$ref": Object.schema_name()},
-                cls._obj_cls_common_annotation: {"$ref": Object.schema_name()},
-                cls._rel_cls_common_annotation: {"$ref": Object.schema_name()},
                 cls._knowledge_graph_hash_key: {"type": "integer"},
+                cls._comment_key: {"type": "string"},
             },
             "required": [cls._bb_key, cls._rel_key, cls._labelmap_key],
             "additionalProperties": False
         }
 
-    def validate(self, logger: Logger) -> bool:
+    def validate(
+            self,
+            logger: Logger,
+            add_missing: bool = True,
+    ) -> bool:
+        """
+        Validate that the scene graph is consistent with the knowledge graph.
+        :param logger: The logger.
+        :param add_missing: Whether to add missing attributes/keypoints to objects/relations.
+                            Only a warning is raised if we perform this operation, rather than complete failure.
+        :return:
+        """
         success = True
 
         # Validate bounding boxes
         n_dim = len(self.object_labelmap.shape)
         for bb_list in self._bb_by_class_id.values():
             for bb in bb_list:
-                success &= bb.validate(self.knowledge_graph, logger)
+                # TODO add missing keypoints
+                success &= bb.validate(self.knowledge_graph, logger, add_missing=add_missing)
                 success &= bb.validate_bounding_box_length(n_dim, logger)
                 success &= bb.validate_keypoint_length(n_dim, logger)
         known_bb_ids = [bb.id for bb_list in self._bb_by_class_id.values() for bb in bb_list]
@@ -252,30 +246,35 @@ class SceneGraph(SceneGraphComponent):
                 # Linter is too dumb to cast both lists to the list[Object] primitive
                 # noinspection PyTypeChecker
                 objects = [bb for bb_list in self._bb_by_class_id.values() for bb in bb_list]
+                # TODO add missing keypoints
                 success &= rel.validate_references(self.knowledge_graph, objects, logger)
+                success &= rel.validate_attributes(
+                    self.knowledge_graph.get_rule_by_id(rel.rule_id),
+                    self.knowledge_graph.rel_common,
+                    logger,
+                    add_missing=add_missing
+                )
                 success &= rel.validate_keypoint_length(n_dim, logger)
 
-        # Image level / obj common / rel common annotation
-        for obj, obj_class in [
-            [self.image, self.knowledge_graph.image],
-            [self.obj_common, self.knowledge_graph.obj_common],
-            [self.rel_common, self.knowledge_graph.rel_common],
-        ]:
-            success &= obj.validate_attributes(obj_class, self.knowledge_graph.obj_common, logger)
-            success &= obj.validate_keypoint_length(n_dim, logger)
+        # Image level
+        success &= self.image.validate_attributes(self.knowledge_graph.image, self.knowledge_graph.obj_common, logger)
+        success &= self.image.validate_keypoint_length(n_dim, logger)
 
         return success
 
     def save(self, path: str | PathLike) -> bool:
         """
         Save as a json file at given destination path.
-        Note: automatically remaps (in place) as contiguous indexing.
         :returns: success.
         """
         try:
+            if not Path(path).parent.exists():
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+
             with open(path, "w") as f:
-                self.remap_ids_as_contiguous()
-                json.dump(self.to_json(), f)
+                sg_copy = self.copy()
+                sg_copy.remap_ids_as_contiguous()
+                json.dump(sg_copy.to_json(), f)
             return True
         except FileNotFoundError:
             return False
@@ -310,19 +309,65 @@ class SceneGraph(SceneGraphComponent):
         """Returns an object given the id if found"""
         return self._bb_by_id.get(obj_id)
 
-    def iter_bounding_boxes(self) -> Iterator[BoundingBox]:
+    def iter_bounding_boxes(self, sort=False) -> Iterator[BoundingBox]:
         """Iterator over all bounding boxes in the graph."""
-        yield from self._bb_by_id.values()
+        if sort:
+            for k in sorted(self._bb_by_id.keys()):
+                yield self._bb_by_id[k]
+        else:
+            yield from self._bb_by_id.values()
 
-    def iter_relations(self) -> Iterator[Relation]:
+    def iter_relations(self, sort=False) -> Iterator[Relation]:
         """Iterator over all relations in the graph."""
-        for rels in self.relations_by_rule_id.values():
-            yield from rels
+        if sort:
+            for k in sorted(self.relations_by_rule_id.keys()):
+                yield from self.relations_by_rule_id[k]
+        else:
+            for rels in self.relations_by_rule_id.values():
+                yield from rels
 
     @property
     def bounding_boxes_by_class_id(self) -> dict[int, list[BoundingBox]]:
         """Provide a deep-copy of the first-depth dictionary and value lists."""
         return {key: value.copy() for key, value in self._bb_by_class_id.items()}
+
+    def add_bounding_box(self, bb: BoundingBox):
+        """Adds the bounding box to the scene graph. Used when merging/splitting bounding boxes."""
+        if bb.class_id not in self._bb_by_class_id:
+            self._bb_by_class_id[bb.class_id] = []
+        self._bb_by_class_id[bb.class_id].append(bb)
+        self._bb_by_id[bb.id] = bb
+
+    def remove_bounding_box(self, bb: BoundingBox):
+        """
+        Removes the bounding box to the scene graph. Used when merging/splitting bounding boxes.
+        Note: this method is unsafe and does not clean any relation associated to the removed object.
+        :raises: a ValueError if missing.
+        """
+        self._bb_by_class_id[bb.class_id].remove(bb)
+        del self._bb_by_id[bb.id]
+
+    def add_relation(self, rel: Relation):
+        """
+        Adds the relation to the scene graph.
+        Used when merging/splitting segmentations and updating their relations.
+        """
+        self.relations_by_rule_id[rel.rule_id].append(rel)
+
+    def remove_relation(self, rel: Relation):
+        """
+        Removes the relation to the scene graph.
+        Used when merging/splitting segmentations and updating their relations.
+        :raises: a ValueError if missing.
+        """
+        self.relations_by_rule_id[rel.rule_id].remove(rel)
+
+    def get_next_available_bounding_box_id(self) -> int:
+        """Return an id not currently used for any bounding box in the graph."""
+        next_id = 1
+        while next_id in self._bb_by_id:
+            next_id += 1
+        return next_id
 
     def remap_ids_as_contiguous(self) -> Self:
         """
@@ -334,7 +379,44 @@ class SceneGraph(SceneGraphComponent):
         """
         # BoundingBox ids
         all_bb_ids = [bb.id for bb in self._bb_by_id.values()]
+        # Remap all ids to a continuous id segment
         bb_mapping = contiguous_mapping(all_bb_ids, start=1)
+        # Ensure that unique objects are at the start of the list
+        new_id = 1
+        for object_class in self.knowledge_graph.classes:
+            if object_class.is_unique:
+                # Look for any object in the scene with this class id
+                unique_object = None
+                for bb in self._bb_by_id.values():
+                    if bb.class_id == object_class.id:
+                        unique_object = bb
+                        break
+                if unique_object is None:
+                    # No object for this class
+                    continue
+                # Check whether the object already has the expected id
+                # Note: key absent if no-op
+                mapping_new_unique_object_id = bb_mapping.get(unique_object.id, unique_object.id)
+                if mapping_new_unique_object_id == new_id:
+                    # Update the id for the next unique object even with no-op
+                    new_id += 1
+                    continue
+                # Else we need to find the object currently using this id in the mapping and swap their values
+                for swap_object_id, new_swap_object_id in bb_mapping.items():
+                    if new_swap_object_id == new_id:
+                        # We have a match
+                        break
+                else:
+                    swap_object_id = new_id
+                # Do the swap in the mapping object
+                # noinspection PyUnboundLocalVariable
+                bb_mapping[swap_object_id] = mapping_new_unique_object_id
+                bb_mapping[unique_object.id] = new_id
+
+                # Update the id for the next unique object
+                new_id += 1
+
+        # If there are any changes to be made
         if bb_mapping:
             # Only do the processing if there is something to do
             # Remap class ids
@@ -356,11 +438,11 @@ class SceneGraph(SceneGraphComponent):
                     rel.subject_id = bb_mapping.get(rel.subject_id, rel.subject_id)
                     rel.object_id = bb_mapping.get(rel.object_id, rel.object_id)
 
-        # Note: attributes/keypoints can only be remapped at a knowledge graph level (like object-class ids)
-        # TODO: we need a script to do both at once
+            # Note: attributes/keypoints can only be remapped at a knowledge graph level (like object-class ids)
+            # TODO: we need a script to do both at once
 
-        # Update shorthand (also not need for mapping ids as they already have been updated)
-        self._bb_by_id = {bb.id: bb for bb in self._bb_by_id.values()}
+            # Update shorthand (also not need for mapping ids as they already have been updated)
+            self._bb_by_id = {bb.id: bb for bb in self._bb_by_id.values()}
         return self
 
     def __repr__(self):
@@ -369,17 +451,11 @@ class SceneGraph(SceneGraphComponent):
                                         for rel in self.relations_by_rule_id[rule_id]]))
         image_attr_repr = ",".join(map(repr, self.image.attributes))
         image_kp_repr = ",".join(map(repr, self.image.keypoints))
-        obj_common_attr_repr = ",".join(map(repr, self.obj_common.attributes))
-        obj_common_kp_repr = ",".join(map(repr, self.obj_common.keypoints))
-        rel_common_attr_repr = ",".join(map(repr, self.rel_common.attributes))
-        rel_common_kp_repr = ",".join(map(repr, self.rel_common.keypoints))
         return (f"{type(self).__name__}(hash={self.knowledge_graph.hash}, affine={self.image_affine}, "
                 f"bounding_boxes=[{bbs_repr}],relations=[{rels_repr}],"
                 f"label_map_shape={self.object_labelmap.shape}, "
                 f"label_map_values={list(np.unique(self.object_labelmap))},"
-                f"image_level_attributes=[{image_attr_repr}], image_level_keypoints=[{image_kp_repr}], "
-                f"obj_common_attributes=[{obj_common_attr_repr}], obj_common_attributes=[{obj_common_kp_repr}], "
-                f"rel_common_attributes=[{rel_common_attr_repr}], rel_common_keypoints=[{rel_common_kp_repr}])")
+                f"image_level_attributes=[{image_attr_repr}], image_level_keypoints=[{image_kp_repr}])")
 
     def copy(self) -> Self:
         return deepcopy(self)
@@ -440,13 +516,17 @@ class SceneGraph(SceneGraphComponent):
         object_labelmap, n_objects = cc3d.connected_components(initial_segmentation, return_N=True)
 
         # We add the unique objects to the labelmap
-        for unique_obj_class_id in unique_objects:
+        # Note: we want them at the start of the list (ids starting with 1), to get a better overview
+        #       rather than having them at the end
+        n_unique_objects = len(unique_objects)
+        n_objects += n_unique_objects
+        object_labelmap[object_labelmap > 0] += n_unique_objects
+        for new_obj_id, unique_obj_class_id in enumerate(unique_objects, 1):
             mask = unique_objects[unique_obj_class_id]
-            object_labelmap[mask] = n_objects + 1
+            object_labelmap[mask] = new_obj_id
             initial_segmentation[mask] = unique_obj_class_id
-            n_objects += 1
 
-        # Compute id mapping to class ids
+        # Compute id mapping to class ids by matching the first occurrence of an object id to a class in the seg
         ids_to_class: dict[int, int] = {}
         for obj_id in range(1, n_objects + 1):
             # Get class id and check knowledge graph
@@ -522,9 +602,6 @@ class SceneGraph(SceneGraphComponent):
                 labelmap_array[labelmap_array == obj_id] = 0
                 continue
 
-            # Pre-instantiate object attributes with default value
-            obj_default_attributes = [Attribute(attr.id, attr.default_value()) for attr in obj_class.attributes]
-            obj_default_keypoints = [Keypoint(kp.id, [0] * n_dim) for kp in obj_class.keypoints]
             # Add the object to the list
             # Compute the bounding box from the coarse segmentation
             obj_mask = labelmap_array == obj_id
@@ -534,10 +611,9 @@ class SceneGraph(SceneGraphComponent):
                 int(obj_class_id),  # Cast np.int32 to int to avoid JSON serialization issues
                 int(obj_id),  # Cast + ~~make object ids start at 1~~ 0 is for background
                 BoundingBox.default_name(knowledge_graph, obj_class_id, obj_id),
-                attributes=obj_default_attributes,
-                keypoints=obj_default_keypoints,
                 bounding_box=bb
             )
+            obj.init_attributes_keypoints(obj_class, n_dim, knowledge_graph.obj_common)
 
             bounding_box_instances.append(obj)
             # Note: We now want to keep as much information as possible, so we keep these masks.
@@ -547,46 +623,16 @@ class SceneGraph(SceneGraphComponent):
             #     labelmap[obj_mask] = 0
 
         if not failed:
-            # Pre-instantiate attributes/keypoints for image level/obj common/rel common
-            img_default_attributes = [
-                Attribute(attr.id, attr.default_value())
-                for attr in knowledge_graph.image.attributes
-            ]
-            img_default_keypoints = [
-                Keypoint(attr.id, attr.default_value())
-                for attr in knowledge_graph.image.keypoints
-            ]
-            obj_common_default_attributes = [
-                Attribute(attr.id, attr.default_value())
-                for attr in knowledge_graph.obj_common.attributes
-            ]
-            obj_common_default_keypoints = [
-                Keypoint(attr.id, attr.default_value())
-                for attr in knowledge_graph.obj_common.keypoints
-            ]
-            rel_common_default_attributes = [
-                Attribute(attr.id, attr.default_value())
-                for attr in knowledge_graph.rel_common.attributes
-            ]
-            rel_common_default_keypoints = [
-                Keypoint(attr.id, attr.default_value())
-                for attr in knowledge_graph.rel_common.keypoints
-            ]
-
             graph = SceneGraph(
                 knowledge_graph,
                 labelmap.affine,
                 labelmap.header,
                 bounding_box_instances,
                 [],
-                labelmap_array,
-                image_level_attributes=img_default_attributes,
-                image_level_keypoints=img_default_keypoints,
-                obj_common_attributes=obj_common_default_attributes,
-                obj_common_keypoints=obj_common_default_keypoints,
-                rel_common_attributes=rel_common_default_attributes,
-                rel_common_keypoints=rel_common_default_keypoints
+                labelmap_array
             )
+            graph.image.init_attributes_keypoints(knowledge_graph.image, n_dim, None)
+
             if graph.validate(logger):
                 return graph
 

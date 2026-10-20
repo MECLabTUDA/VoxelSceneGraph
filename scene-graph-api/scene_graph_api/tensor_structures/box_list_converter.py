@@ -294,7 +294,7 @@ class BoxListConverter:
         else:
             affine = np.eye(4)
 
-        labelmap: torch.LongTensor = FieldExtractor.labelmap(boxlist).cpu().numpy()
+        labelmap = FieldExtractor.labelmap(boxlist).cpu().numpy()
         # noinspection PyUnresolvedReferences
         ids_to_class = {idx: lbl.item() for idx, lbl in enumerate(FieldExtractor.labels(boxlist), start=1)}
 

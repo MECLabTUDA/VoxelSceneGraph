@@ -38,12 +38,15 @@ class TestSceneGraph(TestCase):
     # Define knowledge for some tests
     bb_class_id = 1
     seg_class_id = 2
+    unique_class_id = 3
     rel_id = 1
     unknown_id = 42
     template_hash = 0
     template = NaturalImageKG(
         [ObjectClass(bb_class_id, attributes=[StrAttribute(1, "Attr")], has_mask=False),
-         ObjectClass(seg_class_id, name="Mask", has_mask=True)],
+         ObjectClass(seg_class_id, name="Mask", has_mask=True),
+         ObjectClass(unique_class_id, name="unique", has_mask=True, is_unique=True),
+         ],
         [RelationRule(rel_id, "rule", WhitelistFilter([bb_class_id]), WhitelistFilter([bb_class_id]))],
         [], [],
         [], [],
@@ -86,7 +89,8 @@ class TestSceneGraph(TestCase):
                 BoundingBox(self.seg_class_id, 2, "", [[0, 1], [0, 1]]).to_json()],
             SceneGraph._rel_key: [Relation(1, 1, 3).to_json()],
             SceneGraph._labelmap_key: labelmap_str,
-            SceneGraph._knowledge_graph_hash_key: self.template_hash
+            SceneGraph._knowledge_graph_hash_key: self.template_hash,
+            SceneGraph._comment_key: "Test"
         }
         self.assertEqual(0, len(list(self.validator.iter_errors(json_dict))))
         res = SceneGraph.from_json(self.template, json_dict, self.logger)
@@ -96,6 +100,7 @@ class TestSceneGraph(TestCase):
         self.assertEqual(1, len(res.bounding_boxes_by_class_id[self.seg_class_id]))
         self.assertEqual(1, len(res.relations_by_rule_id[1]))
         self.assertTrue(isinstance(res.relations_by_rule_id[1][0], Relation))
+        self.assertEqual("Test", res.comment)
 
     # def test_from_json_valid(self):
     #     arr = np.zeros((3, 3))
@@ -476,6 +481,48 @@ class TestSceneGraph(TestCase):
         self.assertIsNone(graph.get_bounding_box_by_id(3))
         self.assertFalse(4 in graph._bb_by_id)
         self.assertFalse(3 in graph._bb_by_id)
+
+    def test_remap_ids_as_contiguous_remap_unique_to_start(self):
+        graph = SceneGraph(
+            self.template,
+            np.eye(4),
+            nib.Nifti1Header(),
+            [
+                BoundingBox(self.bb_class_id, 4, "A", [[0, 0], [0, 0]], attributes=[Attribute(1, "sf")]),
+                BoundingBox(self.bb_class_id, 1, "B", [[0, 0], [0, 0]], attributes=[Attribute(1, "sf")]),
+                BoundingBox(self.unique_class_id, 2, "C", [[0, 0], [0, 0]]),
+            ],
+            [],
+            np.array([[3]])
+        )
+        graph.remap_ids_as_contiguous()
+        # Check bb ids
+        self.assertIsNotNone(graph.get_bounding_box_by_id(1))
+        self.assertIsNotNone(graph.get_bounding_box_by_id(2))
+        self.assertIsNotNone(graph.get_bounding_box_by_id(3))
+        # Check that the unique object is now at the start of the list
+        self.assertEqual(self.unique_class_id, graph.get_bounding_box_by_id(1).class_id)
+
+    def test_remap_ids_as_contiguous_remap_unique_to_start_other_noop(self):
+        graph = SceneGraph(
+            self.template,
+            np.eye(4),
+            nib.Nifti1Header(),
+            [
+                BoundingBox(self.bb_class_id, 1, "B", [[0, 0], [0, 0]], attributes=[Attribute(1, "sf")]),
+                BoundingBox(self.unique_class_id, 2, "C", [[0, 0], [0, 0]]),
+                BoundingBox(self.bb_class_id, 3, "A", [[0, 0], [0, 0]], attributes=[Attribute(1, "sf")]),
+            ],
+            [],
+            np.array([[3]])
+        )
+        graph.remap_ids_as_contiguous()
+        # Check bb ids
+        self.assertIsNotNone(graph.get_bounding_box_by_id(1))
+        self.assertIsNotNone(graph.get_bounding_box_by_id(2))
+        self.assertIsNotNone(graph.get_bounding_box_by_id(3))
+        # Check that the unique object is now at the start of the list
+        self.assertEqual(self.unique_class_id, graph.get_bounding_box_by_id(1).class_id)
 
     def test_repr(self):
         graph = SceneGraph(

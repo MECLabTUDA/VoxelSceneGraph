@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import sys
 from pathlib import Path
 from typing import Iterable
 
@@ -23,3 +24,24 @@ def remove_suffixes(path: Path | Iterable[Path]) -> str | list[str]:
     if isinstance(path, Path):
         return path.name[:-len("".join(path.suffixes))]
     return [p.name[:-len("".join(p.suffixes))] for p in path]
+
+
+def get_datadir() -> Path:
+    """
+    Returns a parent directory path
+    where persistent application data can be stored.
+
+    # linux: ~/.local/share
+    # macOS: ~/Library/Application Support
+    # windows: C:/Users/<USER>/AppData/Roaming
+    """
+
+    home = Path.home()
+    if sys.platform == "win32":
+        return home / "AppData/Roaming"
+    elif sys.platform == "linux":
+        return home / ".local/share"
+    elif sys.platform == "darwin":
+        return home / "Library/Application Support"
+    else:
+        return Path(".")

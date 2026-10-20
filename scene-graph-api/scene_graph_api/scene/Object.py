@@ -98,7 +98,28 @@ class Object(SceneGraphComponent, ABC):
             return class_name
         return f"{class_name} {obj_id}"
 
-    def validate(self, knowledge: KnowledgeGraph, logger: Logger) -> bool:
+    def init_attributes_keypoints(self, obj_class: ObjectClass, n_dim: int,
+                                  obj_common_class: ObjectClass | None = None):
+        """
+        Overwrites the attributes and keypoints lists with default values if not already set.
+        Note: an image-level object class does not have any common annotation.
+        """
+        if not self.common_attributes and obj_common_class is not None:
+            self.common_attributes = [Attribute(attr.id, attr.default_value()) for attr in obj_common_class.attributes]
+        if not self.common_keypoints and obj_common_class is not None:
+            self.common_keypoints = [Keypoint(kp.id, [0] * n_dim) for kp in obj_common_class.keypoints]
+
+        if not self.attributes:
+            self.attributes = [Attribute(attr.id, attr.default_value()) for attr in obj_class.attributes]
+        if not self.keypoints:
+            self.keypoints = [Keypoint(kp.id, [0] * n_dim) for kp in obj_class.keypoints]
+
+    def validate(
+            self,
+            knowledge: KnowledgeGraph,
+            logger: Logger,
+            add_missing: bool = True,
+    ) -> bool:
         """
         Checks that object class is defined in the knowledge graph.
         Attempts to cast the values stored in the JSON file to the correct type.
@@ -110,20 +131,27 @@ class Object(SceneGraphComponent, ABC):
             logger.error(f"{context_str} Object class id {self.class_id} does not exist in the knowledge graph.")
             return False
 
-        return self.validate_attributes(obj_class, knowledge.obj_common, logger)
+        # TODO validate keypoints
+        return self.validate_attributes(obj_class, knowledge.obj_common, logger, add_missing=add_missing)
 
-    def validate_attributes(self, obj_class: ObjectClass, obj_common_class: ObjectClass, logger: Logger) -> bool:
+    def validate_attributes(
+            self,
+            obj_class: ObjectClass,
+            obj_common_class: ObjectClass,
+            logger: Logger,
+            add_missing: bool = True,
+    ) -> bool:
         """Validate class-common and -specific attributes."""
         context_str = f"In Object with id {self.id}:"
         success = True
 
-        for attr_set, cur_obj_class, name in [
+        for attr_list, cur_obj_class, name in [
             [self.common_attributes, obj_common_class, "common attributes"],
             [self.attributes, obj_class, "attributes"],
         ]:
             # Validate attribute values
             seen_attr_ids = set()
-            for attr in attr_set:
+            for attr in attr_list:
                 success &= attr.validate_type_and_value(cur_obj_class, logger)
                 seen_attr_ids.add(attr.id)
 
@@ -131,9 +159,14 @@ class Object(SceneGraphComponent, ABC):
             class_attr_ids = {attr.id for attr in cur_obj_class.attributes}
             missing_ids = class_attr_ids.difference(seen_attr_ids)
             if missing_ids:
-                logger.error(f"{context_str} Some {name} with ids (" + ", ".join([str(i) for i in missing_ids]) +
-                             ") are missing.")
-                success = False
+                if add_missing:
+                    logger.warning(f"{context_str} Adding missing {name} with ids {missing_ids}.")
+                    for missing_id in missing_ids:
+                        attr = Attribute(missing_id, cur_obj_class.get_attribute_by_id(missing_id).default_value())
+                        attr_list.append(attr)
+                else:
+                    logger.error(f"{context_str} Some {name} with ids {missing_ids} are missing.")
+                    success = False
 
         return success
 
@@ -258,9 +291,14 @@ class BoundingBox(Object):
         out[self._bb_key] = [list(self.bounding_box[0]), list(self.bounding_box[1])]
         return out
 
-    def validate(self, knowledge: KnowledgeGraph, logger: Logger) -> bool:
+    def validate(
+            self,
+            knowledge: KnowledgeGraph,
+            logger: Logger,
+            add_missing: bool = True,
+    ) -> bool:
         """Also checks that the bounding box coordinates are in the format upper left, bottom right."""
-        success = super().validate(knowledge, logger)
+        success = super().validate(knowledge, logger, add_missing=add_missing)
         context_str = f"In BoundingBox with id {self.id}:"
 
         # Check that the number of coordinates is even

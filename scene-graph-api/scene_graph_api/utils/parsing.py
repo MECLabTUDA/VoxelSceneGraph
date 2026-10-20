@@ -158,6 +158,37 @@ def check_list_unicity(
     return success or warn_only
 
 
+def check_lists_same_length(
+        value_list_1: list,
+        value_list_2: list,
+        logger: _Logger,
+        value_name_1: str = "Value 1",
+        value_name_2: str = "Value 2",
+        warn_only: bool = False
+) -> bool:
+    """Function used to check that two lists have the same length"""
+    if len(value_list_1) != len(value_list_2):
+        (logger.warning if warn_only else logger.error)(
+            f"{value_name_1} ({len(value_list_1)}) and {value_name_2} ({len(value_list_2)}) have different lengths."
+        )
+        return False
+    return True
+
+
+def check_list_not_empty(
+        value_list: list,
+        logger: _Logger,
+        name: str = "Value"
+) -> bool:
+    """Function used to check that two lists have the same length"""
+    if len(value_list) == 0:
+        logger.error(
+            f"List {name} cannot be empty."
+        )
+        return False
+    return True
+
+
 def load_json_from_path(path: str | _os.PathLike,
                         context_str: str | None = None,
                         logger: _Logger | None = None) -> dict | None:

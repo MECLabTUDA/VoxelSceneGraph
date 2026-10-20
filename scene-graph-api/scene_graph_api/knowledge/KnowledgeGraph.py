@@ -27,8 +27,8 @@ from typing import Type
 
 from typing_extensions import Self
 
-from . import Keypoint
 from .Attribute import Attribute
+from .Keypoint import Keypoint
 from .KnowledgeComponent import KnowledgeComponent
 from .ObjectClass import ObjectClass
 from .RelationRule import RelationRule
@@ -81,7 +81,7 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
         self.obj_common = ObjectClass(1, "ObjCommon",
                                       attributes=obj_common_attributes, keypoints=obj_common_keypoints)
         self.rel_common = RelationRule(1, "RelCommon",
-                                      attributes=rel_common_attributes, keypoints=rel_common_keypoints)
+                                       attributes=rel_common_attributes, keypoints=rel_common_keypoints)
         self.hash = hash_
 
     @classmethod
@@ -327,7 +327,6 @@ class KnowledgeGraph(KnowledgeComponent, ABC):
         }
 
     # Methods related to the data loading, that can be overwritten
-
     @classmethod
     @abstractmethod
     def get_graph_type(cls) -> str:
@@ -396,7 +395,7 @@ class _ImageAxis(Enum):
     sagittal = "sagittal"
 
     def to_axis(self) -> int:
-        """Map to the corresponding axis for depth-first arrays."""
+        """Map to the corresponding axis for depth-first arrays (assuming axial-oriented arrays)."""
         match self:
             case self.axial:
                 return 0
@@ -430,8 +429,8 @@ class RadiologyImageKG(KnowledgeGraph):
             rel_common_attributes: list[Attribute] | None = None,
             rel_common_keypoints: list[Keypoint] | None = None,
             hash_: int = 0,
-            window_center: int = 50,  # Used for display
-            window_width: int = 100,  # Used for display
+            window_center: int | list[int] = None,  # Used for display
+            window_width: int | list[int] = None,  # Used for display
             default_axis: _ImageAxis = _ImageAxis.axial  # Used for display
     ):
         super().__init__(
@@ -445,10 +444,21 @@ class RadiologyImageKG(KnowledgeGraph):
             rel_common_keypoints=rel_common_keypoints,
             hash_=hash_
         )
+
+        if window_center is None:
+            window_center = []
+        if window_width is None:
+            window_width = []
+
+        if isinstance(window_center, int):
+            window_center = [window_center]
+        if isinstance(window_width, int):
+            window_width = [window_width]
+
         # Used for display
-        self.window_center = window_center
-        self.window_width = window_width
-        self.default_axis = default_axis
+        self.window_center: list[int] = window_center
+        self.window_width: list[int] = window_width
+        self.default_axis: _ImageAxis = default_axis
 
     @classmethod
     def get_graph_type(cls) -> str:
@@ -460,22 +470,71 @@ class RadiologyImageKG(KnowledgeGraph):
         # noinspection PyProtectedMember
         return {
             "if": {"properties": {cls._type_key: {"const": cls.get_graph_type()}}},
+            # Expect window information as either two integers or two lists of integers
             "then": {
                 "properties": {
-                    cls._window_center_key: {"type": "integer", "minimum": 1},
-                    cls._window_width_key: {"type": "integer", "minimum": 1},
+                    # Ensure that each is either an integer or an array of integers
+                    cls._window_center_key: {
+                        "oneOf": [
+                            {"type": "integer"},
+                            {
+                                "type": "array",
+                                "items": {"type": "integer"}
+                            }
+                        ]
+                    },
+                    cls._window_width_key: {
+                        "oneOf": [
+                            {"type": "integer", "minimum": 1},
+                            {
+                                "type": "array",
+                                "items": {"type": "integer", "minimum": 1}
+                            }
+                        ]
+                    },
                     cls._default_axis_key: {
                         "type": "string",
                         "pattern": list_of_names_to_pattern_filter(_ImageAxis._member_map_)
                     },
                 },
-                "required": [cls._window_center_key, cls._window_width_key]
+                "required": [cls._window_center_key, cls._window_width_key],
+                # Enforce that both have the same type and/or length
+                "anyOf": [
+                    {
+                        "properties": {
+                            cls._window_center_key: {"type": "integer"},
+                            cls._window_width_key: {"type": "integer"}
+                        }
+                    },
+                    {
+                        "properties": {
+                            cls._window_center_key: {"type": "array"},
+                            cls._window_width_key: {"type": "array"}
+                        }
+                    }
+                ]
+
             }
         }
 
+    def validate(self, logger: Logger) -> bool:
+        """
+        Checks that every object class reference is valid.
+        These are present in relation rules and class filters.
+        Also check that window information is of the same length if both arrays
+        """
+        success = super().validate(logger)
+        if isinstance(self.window_center, list):
+            success &= check_lists_same_length(
+                self.window_center, self.window_width, logger,
+                "window_center", "window_width"
+            )
+
+        return success
+
     def _load_additional_fields(self, json_dict: dict):
-        self.window_center = int(json_dict.get(self._window_center_key, self.window_center))
-        self.window_width = int(json_dict.get(self._window_width_key, self.window_width))
+        self.window_center = json_dict.get(self._window_center_key, self.window_center)
+        self.window_width = json_dict.get(self._window_width_key, self.window_width)
         self.default_axis = _ImageAxis[json_dict.get(self._default_axis_key, self.default_axis.value)]
 
     def _save_additional_fields(self, json_dict: dict):

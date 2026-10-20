@@ -81,7 +81,24 @@ class Relation(SceneGraphComponent):
             self._keypoints_key: [kp.to_json() for kp in self.keypoints],
         }
 
-    def validate_references(self, graph: KnowledgeGraph, object_list: list[Object], logger: Logger) -> bool:
+    def init_attributes_keypoints(self, rel_class: RelationRule, n_dim: int, rel_common_class: RelationRule):
+        """Overwrites the attributes and keypoints lists with default values if not already set."""
+        if not self.common_attributes:
+            self.common_attributes = [Attribute(attr.id, attr.default_value()) for attr in rel_common_class.attributes]
+        if not self.common_keypoints:
+            self.common_keypoints = [Keypoint(kp.id, [0] * n_dim) for kp in rel_common_class.keypoints]
+
+        if not self.attributes:
+            self.attributes = [Attribute(attr.id, attr.default_value()) for attr in rel_class.attributes]
+        if not self.keypoints:
+            self.keypoints = [Keypoint(kp.id, [0] * n_dim) for kp in rel_class.keypoints]
+
+    def validate_references(
+            self,
+            graph: KnowledgeGraph,
+            object_list: list[Object],
+            logger: Logger,
+    ) -> bool:
         """Checks that subject, and object ids are known and that their object class fits the relation rule."""
         context_str = f"In Relation with rule id {self.rule_id}:"
         # Check that the relation id matches a rule in the knowledge graph
@@ -124,30 +141,41 @@ class Relation(SceneGraphComponent):
                              f"cannot be the object of a relation of rule id {rule.id}")
                 success = False
 
-        return self.validate_attributes(rule, graph.rel_common, logger) and success
+        return success
 
-    def validate_attributes(self, rel_class: RelationRule, rel_common_class: RelationRule, logger: Logger) -> bool:
+    def validate_attributes(
+            self,
+            rel_class: RelationRule,
+            rel_common_class: RelationRule,
+            logger: Logger,
+            add_missing: bool = True,
+    ) -> bool:
         """Validate class-common and -specific attributes."""
         context_str = f"In Relation with id {self.rule_id}:"
         success = True
 
-        for attr_set, cur_obj_class, name in [
+        for attr_list, cur_rel_rule, name in [
             [self.common_attributes, rel_common_class, "common attributes"],
             [self.attributes, rel_class, "attributes"],
         ]:
             # Validate attribute values
             seen_attr_ids = set()
-            for attr in attr_set:
-                success &= attr.validate_type_and_value(cur_obj_class, logger)
+            for attr in attr_list:
+                success &= attr.validate_type_and_value(cur_rel_rule, logger)
                 seen_attr_ids.add(attr.id)
 
             # Check that no attribute defined in the object class is missing
-            class_attr_ids = {attr.id for attr in cur_obj_class.attributes}
+            class_attr_ids = {attr.id for attr in cur_rel_rule.attributes}
             missing_ids = class_attr_ids.difference(seen_attr_ids)
             if missing_ids:
-                logger.error(f"{context_str} Some {name} with ids (" + ", ".join([str(i) for i in missing_ids]) +
-                             ") are missing.")
-                success = False
+                if add_missing:
+                    logger.warning(f"{context_str} Adding missing {name} with ids {missing_ids}.")
+                    for missing_id in missing_ids:
+                        attr = Attribute(missing_id, cur_rel_rule.get_attribute_by_id(missing_id).default_value())
+                        attr_list.append(attr)
+                else:
+                    logger.error(f"{context_str} Some {name} with ids {missing_ids} are missing.")
+                    success = False
 
         return success
 

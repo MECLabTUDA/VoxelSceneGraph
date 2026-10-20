@@ -743,6 +743,7 @@ class TestBoxListOps(unittest.TestCase):
 
         torch.testing.assert_close(transformed.boxes, expected_boxes)
 
+    @unittest.skipIf(not torch.cuda.is_available(), "no CUDA detected")
     def test_affine_transformation_no_masks_translate_cuda(self):
         boxlist = BoxList(
             torch.tensor([
@@ -779,6 +780,7 @@ class TestBoxListOps(unittest.TestCase):
 
         torch.testing.assert_close(transformed.boxes, expected_boxes)
 
+    @unittest.skipIf(not torch.cuda.is_available(), "no CUDA detected")
     def test_affine_transformation_no_masks_scale_cuda(self):
         boxlist = BoxList(
             torch.tensor([

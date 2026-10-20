@@ -29,10 +29,10 @@ class AnnotationField(Enum):
     KP_CLS_OFFSETS = "kp_cls_offsets"  # Since class-specific keypoints are appended one after the other,
     #                                    this field provides a cumulative sum for easier indexing
     MASKS = "masks"  # Individual binary masks for each object as a BinaryMaskList
-    IMPORTANCE = "importance"  # Weight for each object; allows to focus the training on more relevant objects.
-    #                            Usually computed on the fly based on relations as (1 + #rels implicating this object)
     LABELMAP = "labelmap"  # Instance segmentation mask for the whole image
     SEGMENTATION = "segmentation"  # Semantic segmentation mask for the whole image
+    IMPORTANCE = "importance"  # Weight for each object; allows to focus the training on more relevant objects.
+    #                            Usually computed on the fly based on relations as (1 + #rels implicating this object)
     RELATIONS = "relations"  # Relations as NxN matrix with relation label for each pair of object
     RELATION_ATTRIBUTES = "relation_attributes"  # Same as for obj attributes
     REL_ATTR_CLS_OFFSETS = "rel_attr_cls_offsets"  # Same as for objects
@@ -67,6 +67,7 @@ class PredictionField(Enum):
     PRED_SEGMENTATION_LOGITS = "pred_segmentation_logits"  # Predicted logits for the semantic segmentation
     PRED_LABELS = "pred_labels"  # Predicted object class
     PRED_MASKS = "pred_masks"  # Predicted binary instance-segmentation for each bbox
+    PRED_LABELMAP = "pred_labelmap"  # Predicted labelmap. Mostly used to store predictions in a compressed way.
     PRED_SCORES = "pred_scores"  # Predicted score for PREDICTED OBJECT CLASS only
     PRED_CLS_SCORES = "pred_cls_scores"  # Predicted score for each class (background included); box-head internal
     PRED_LOGITS = "pred_logits"  # Class logits for detected objects;
@@ -79,7 +80,7 @@ class PredictionField(Enum):
     # Relations
     PRED_REL_CLS_SCORES = "pred_rel_cls_scores"  # Predicted score for each predicate class (including background)
     PRED_REL_LABELS = "pred_rel_labels"  # Predicted predicate class; mostly unused, rather computed as argmax of scores
-    REL_PAIR_IDXS = "rel_pair_idxs"  # (object idx, subject idx) pairs for predicted relations
+    REL_PAIR_IDXS = "rel_pair_idxs"  # (subject idx, object idx) pairs for predicted relations
     BOXES_PER_CLS = "boxes_per_cls"  # Added by the box head; bbox prediction for each class (including the background)
     #                                  (required (for sgdet only) because the obj class prediction is not final yet,
     #                                  and we might need to switch to the predicted box for the new class)
@@ -102,7 +103,8 @@ class PredictionField(Enum):
 
     def indexing_power(self) -> int:
         match self:
-            case PredictionField.PRED_SEGMENTATION | PredictionField.KEYPOINT_LOGITS | PredictionField.REL_PAIR_IDXS:
+            case PredictionField.PRED_SEGMENTATION | PredictionField.KEYPOINT_LOGITS | PredictionField.REL_PAIR_IDXS | \
+                 PredictionField.PRED_LABELMAP:
                 return 0
             case PredictionField.PRED_REL_CLS_SCORES | PredictionField.PRED_REL_LABELS | \
                  PredictionField.REL_PAIR_IDXS:

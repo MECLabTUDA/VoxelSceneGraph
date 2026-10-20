@@ -114,10 +114,19 @@ class TestObject(TestCase):
 
     def test_validate_valid_missing_attr(self):
         obj = Object(self.object_class_id, 2, "name")
-        success = obj.validate(self.template, self.logger)
+        success = obj.validate(self.template, self.logger, add_missing=False)
         self.assertFalse(success)
         self.assertEqual(0, self.handler.get_warning_message_count())
         self.assertEqual(1, self.handler.get_error_message_count())
+        self.assertEqual(0, len(obj.attributes))
+
+    def test_validate_valid_missing_attr_with_adding(self):
+        obj = Object(self.object_class_id, 2, "name")
+        success = obj.validate(self.template, self.logger, add_missing=True)
+        self.assertTrue(success)
+        self.assertEqual(1, self.handler.get_warning_message_count())
+        self.assertEqual(0, self.handler.get_error_message_count())
+        self.assertEqual(1, len(obj.attributes))
 
     def test_validate_valid_unknown_attr(self):
         obj = Object(self.object_class_id, 2, "name", attributes=[Attribute(42, "attr"), Attribute(1, "attr templ")])

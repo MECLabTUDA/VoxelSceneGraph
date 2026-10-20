@@ -90,6 +90,31 @@ class TestKnowledgeGraph(TestCase):
         self.assertEqual(99, res.window_width)
         self.assertEqual(RadiologyImageKG.ImageAxis.sagittal, res.default_axis)
 
+    def test_radiology_image_type_from_json_valid_multiple_windows(self):
+        json_dict = {
+            KnowledgeGraph._type_key: RadiologyImageKG.get_graph_type(),
+            KnowledgeGraph._object_classes_key: [ObjectClass(1, "").to_json()],
+            RadiologyImageKG._window_center_key: [90, 91],
+            RadiologyImageKG._window_width_key: [99, 100],
+        }
+
+        self.assertEqual(0, len(list(self.validator.iter_errors(json_dict))))
+        # noinspection PyTypeChecker
+        res: RadiologyImageKG = KnowledgeGraph.from_json(json_dict)
+        self.assertEqual([90, 91], res.window_center)
+        self.assertEqual([99, 100], res.window_width)
+        self.assertEqual(RadiologyImageKG.ImageAxis.axial, res.default_axis)
+
+    def test_radiology_image_type_from_json_invalid_multiple_windows_diff_types(self):
+        json_dict = {
+            KnowledgeGraph._type_key: RadiologyImageKG.get_graph_type(),
+            KnowledgeGraph._object_classes_key: [ObjectClass(1, "").to_json()],
+            RadiologyImageKG._window_center_key: [90, 91],
+            RadiologyImageKG._window_width_key: 99,
+        }
+
+        self.assertEqual(1, len(list(self.validator.iter_errors(json_dict))))
+
     def test_radiology_image_type_from_json_missing_additional_fields(self):
         json_dict = {
             KnowledgeGraph._type_key: RadiologyImageKG.get_graph_type(),
@@ -204,6 +229,18 @@ class TestKnowledgeGraph(TestCase):
         self.assertEqual(0, self.handler.get_warning_message_count())
         self.assertEqual(1, self.handler.get_error_message_count())
 
+    def test_radiology_image_type_from_json_invalid_multiple_windows_different_lengths(self):
+        tmp = RadiologyImageKG(classes=[], window_center=[90, 91], window_width=[99])
+        success = tmp.validate(self.logger)
+        self.assertFalse(success)
+        self.assertEqual(0, self.handler.get_warning_message_count())
+        self.assertEqual(1, self.handler.get_error_message_count())
+
+    def test_radiology_image_type_from_json_valid_windows_empty(self):
+        tmp = RadiologyImageKG(classes=[], window_center=[], window_width=[])
+        success = tmp.validate(self.logger)
+        self.assertTrue(success)
+
     def test_to_json(self):
         tmp = NaturalImageKG(
             [ObjectClass(1, "name")],
@@ -224,8 +261,8 @@ class TestKnowledgeGraph(TestCase):
         obj_dict = tmp.to_json()
         self.assertEqual(1, len(obj_dict[KnowledgeGraph._object_classes_key]))
         self.assertEqual(1, len(obj_dict[KnowledgeGraph._rules_key]))
-        self.assertEqual(200, obj_dict[RadiologyImageKG._window_center_key])
-        self.assertEqual(400, obj_dict[RadiologyImageKG._window_width_key])
+        self.assertEqual([200], obj_dict[RadiologyImageKG._window_center_key])
+        self.assertEqual([400], obj_dict[RadiologyImageKG._window_width_key])
         self.assertEqual(RadiologyImageKG.ImageAxis.sagittal.value, obj_dict[RadiologyImageKG._default_axis_key])
 
     def test_load_valid_json(self):

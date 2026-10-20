@@ -75,6 +75,16 @@ class BoxList:
         self.extra_fields = {}
         self.fields_indexing_power: dict[Hashable, int] = {}
 
+    @classmethod
+    def empty(cls, image_size: _SIZE_T, device: torch.device = torch.cpu) -> Self:
+        """Create a BoxList with no box or field."""
+        n_dim = len(image_size)
+        return cls(torch.tensor([], dtype=torch.float32, device=device).view(0, n_dim * 2), image_size=image_size)
+
+    def is_empty(self) -> bool:
+        """Whether this BoxList is completely empty (no boxes or fields)."""
+        return len(self) == 0 and len(self.extra_fields) == 0
+
     def __getitem__(self, item: slice | list[int] | list[bool] | torch.Tensor) -> Self:
         """
         Like a tensor, it accepts an index, a list/tensor of ints or a list/tensor of bools.
@@ -207,7 +217,8 @@ class BoxList:
         Note: allows for custom processing of loaded objects,
               such as casting to a super-class (e.g. from scene_graph_prediction).
         """
-        return cls.from_state_dict(torch.load(path, weights_only=True))
+        # FIXME Until we figure this out: why do I need this for stored rel predictions?
+        return cls.from_state_dict(torch.load(path, weights_only=False))
 
     def state_dict(self) -> dict[str, Any]:
         """Return the state dict for this BoxList."""

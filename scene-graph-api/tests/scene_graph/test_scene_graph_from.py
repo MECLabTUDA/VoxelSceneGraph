@@ -37,6 +37,7 @@ class TestSceneGraph(TestCase):
     bb_class_id = 1
     seg_class_id = 2
     unique_class_id = 3
+    unique_class_id2 = 5
     ignored_class_id = 4
     rel_id = 1
     unknown_id = 42
@@ -47,6 +48,7 @@ class TestSceneGraph(TestCase):
             ObjectClass(seg_class_id, has_mask=True),
             ObjectClass(unique_class_id, has_mask=True, is_unique=True),
             ObjectClass(ignored_class_id, has_mask=True, is_ignored=True),
+            ObjectClass(unique_class_id2, has_mask=True, is_unique=True),
         ],
         [RelationRule(rel_id, "rule", WhitelistFilter([bb_class_id]), WhitelistFilter([bb_class_id]))],
         [], [],
@@ -120,7 +122,7 @@ class TestSceneGraph(TestCase):
         self.assertTrue(res.validate(self.logger))
 
     def test_create_from_segmentation_check_image_level_attributes_init(self):
-        # Check that attributes are init as the Attribute objects and not just the value
+        # Check that image-level attributes are init as the Attribute objects and not just the value
         # noinspection DuplicatedCode
         arr = np.array(
             [[[self.bb_class_id, 0, self.bb_class_id],
@@ -133,7 +135,33 @@ class TestSceneGraph(TestCase):
         self.assertTrue(res.validate(self.logger))
 
     def test_create_from_segmentation_check_unique_class(self):
-        # Check that attributes are init as the Attribute objects and not just the value
+        # Check that multiple components of a unique class are not split
+        arr = np.array(
+            [[[self.unique_class_id, self.unique_class_id2, self.unique_class_id],
+              [self.seg_class_id, self.unique_class_id2, self.seg_class_id]]],
+            dtype=np.uint8
+        ).reshape((1, 2, 3))
+        seg = NiftiImageWrapper(nib.Nifti1Image(arr, np.eye(4)), True)
+        res = SceneGraph.create_from_segmentation(self.template, seg, self.logger)
+        self.assertIsNotNone(res)
+        # Validate the graph
+        self.assertTrue(res.validate(self.logger))
+        # We expect 4 objects: unique_class_id, unique_class_id2, object seg_class_id, object seg_class_id
+        self.assertEqual(4, len(list(res.iter_bounding_boxes())))
+        self.assertEqual(self.unique_class_id, res.get_bounding_box_by_id(1).class_id)
+        self.assertEqual(self.unique_class_id2, res.get_bounding_box_by_id(2).class_id)
+        self.assertEqual(self.seg_class_id, res.get_bounding_box_by_id(3).class_id)
+        self.assertEqual(self.seg_class_id, res.get_bounding_box_by_id(4).class_id)
+        # Double check with resulting labelmap
+        expected_labelmap = np.array(
+            [[[1, 2, 1],
+              [3, 2, 4]]],
+            dtype=np.uint8
+        ).reshape((1, 2, 3))
+        self.assertTrue(np.allclose(expected_labelmap, res.object_labelmap))
+
+    def test_create_from_segmentation_check_unique_class_at_start(self):
+        # Check that a unique objects have ids starting with 1
         arr = np.array(
             [[[self.unique_class_id, 0, self.unique_class_id],
               [0, 0, 0]]],
@@ -146,7 +174,7 @@ class TestSceneGraph(TestCase):
         self.assertTrue(res.validate(self.logger))
 
     def test_create_from_segmentation_check_ignored_class(self):
-        # Check that attributes are init as the Attribute objects and not just the value
+        # Check that ignored classes are not added to the scene graph
         arr = np.array(
             [[[self.bb_class_id, self.ignored_class_id, self.bb_class_id],
               [self.seg_class_id, self.ignored_class_id, self.seg_class_id]]],
@@ -159,7 +187,7 @@ class TestSceneGraph(TestCase):
         self.assertTrue(res.validate(self.logger))
 
     def test_create_from_segmentation_save_load(self):
-        # Check that attributes are init as the Attribute objects and not just the value
+        # Check that we can save then load a valid scene graph created from a segmentation
         # noinspection DuplicatedCode
         arr = np.array([[[self.bb_class_id, 0, self.bb_class_id],
                          [self.seg_class_id, 0, self.seg_class_id]]], dtype=np.uint8).reshape((1, 2, 3))

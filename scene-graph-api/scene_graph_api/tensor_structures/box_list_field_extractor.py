@@ -32,6 +32,7 @@ class FieldExtractor:
     Note: Since BoxLists with predictions can also contain AnnotationFields,
           but no ground truth BoxList contains PredictionFields,
           we consider that a BoxList with at least one PredictionField is a prediction.
+    Note: extraction of prediction fields is given priority when annotation fields are also available.
     """
 
     # TODO maybe at some point we want to be able to force extracting some fields using the predictions,
@@ -58,6 +59,9 @@ class FieldExtractor:
         # Handle prediction case first
         if boxlist.has_field(PredictionField.PRED_MASKS):
             return boxlist.PRED_MASKS
+
+        if boxlist.has_field(PredictionField.PRED_LABELMAP):
+            return FieldExtractor._labelmap_to_masks(boxlist.PRED_LABELMAP, boxlist.size)
 
         # Then handle ground truth case
         if boxlist.has_field(AnnotationField.MASKS):
@@ -93,6 +97,9 @@ class FieldExtractor:
         :raises ValeError if the field could not be extracted.
         """
         # Handle prediction case first
+        if boxlist.has_field(PredictionField.PRED_LABELMAP):
+            return boxlist.PRED_LABELMAP
+
         if boxlist.has_field(PredictionField.PRED_MASKS):
             return FieldExtractor._masks_to_labelmap(boxlist.PRED_MASKS)
 
@@ -126,6 +133,9 @@ class FieldExtractor:
         # Handle prediction case first
         if boxlist.has_field(PredictionField.PRED_SEGMENTATION):
             return boxlist.PRED_SEGMENTATION
+
+        if boxlist.has_field(PredictionField.PRED_LABELMAP):
+            return FieldExtractor._labelmap_and_labels_to_segmentation(boxlist.PRED_LABELMAP, boxlist.PRED_LABELS)
 
         # Check if we can compute a labelmap to compute the segmentation from
         if boxlist.has_fields(PredictionField.PRED_MASKS, PredictionField.PRED_LABELS):

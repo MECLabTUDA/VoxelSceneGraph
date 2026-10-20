@@ -81,6 +81,12 @@ class BoxListOps:
         if size == boxlist.size:
             return boxlist
 
+        # Micro-optimization for empty boxlists
+        if boxlist.is_empty():
+            boxlist = boxlist.copy()
+            boxlist.size = size
+            return boxlist
+
         assert len(size) == boxlist.n_dim
         ratios = tuple(float(s) / float(s_orig) for s, s_orig in zip(size, boxlist.size))
         if ratios == (ratios[0],) * boxlist.n_dim:
@@ -141,6 +147,13 @@ class BoxListOps:
 
         box = sanitize_cropping_box(box, boxlist.size)
         box_shape = tuple(int(box[boxlist.n_dim + dim] - box[dim] + 1) for dim in range(boxlist.n_dim))
+
+        # Micro-optimization for empty boxlists
+        if boxlist.is_empty():
+            boxlist = boxlist.copy()
+            boxlist.size = box_shape
+            return boxlist
+
         minimums, maximums = BoxListOps.split_into_zyxzyx(boxlist)
 
         # Separate clamp calls because of mix of int/Tensor arguments
@@ -186,6 +199,12 @@ class BoxListOps:
         """
         # TODO add tests that only relevant fields get updated
         assert boxlist.n_dim >= abs(dim.to_idx_from_last())
+
+        # Micro-optimization for empty boxlists
+        if boxlist.is_empty():
+            return boxlist.copy()
+
+
         int_dim = boxlist.n_dim + dim.to_idx_from_last()
 
         minimums, maximums = BoxListOps.split_into_zyxzyx(boxlist)
@@ -237,6 +256,9 @@ class BoxListOps:
               So we need to update the labelmap, which we would otherwise not want to do.
         Note: Same note for the SEGMENTATION field. Updating it requires the labelmap.
         """
+        if len(boxlist) == 0:
+            return boxlist
+
         if isinstance(min_size, int):
             min_size = (min_size,) * boxlist.n_dim
         if isinstance(min_size, (tuple, list)) and len(min_size) != boxlist.n_dim:
@@ -258,6 +280,9 @@ class BoxListOps:
     @staticmethod
     def clip_to_image(boxlist: BoxListBase, remove_empty: bool = True):
         """Clip boxes to the image size. Optionally remove empty boxes."""
+        if len(boxlist) == 0:
+            return boxlist
+
         orig_mode = boxlist.mode
         boxlist = boxlist.convert(boxlist.Mode.zyxzyx)
         boxes = boxlist.boxes.clone()
@@ -562,6 +587,9 @@ class BoxListOps:
         Note: if a box gets duplicated, then only the lowest index will be present in the LABELMAP.
         :raises ValueError: if the LABELMAP cannot be extracted.
         """
+        if len(boxlist) == 0:
+            return boxlist.copy_with_all_fields()
+
         # Check that we can extract the LABELMAP before anything else
         orig_labelmap = FieldExtractor.labelmap(boxlist)
 
