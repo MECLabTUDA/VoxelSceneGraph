@@ -9,41 +9,43 @@ imaging, with a focus on Intracranial Hemorrhage (ICH).
 
 ## 🚀 Where to Start?
 
-New to the project? Here’s how to get started quickly 👇
+New to the project? Here’s how to get started 👇
 
-### 🗂️ 1. Download the Data (BleedScene3D)
+### 🗂️ 1. Get the BleedScene3D Dataset
 
-Our annotated dataset **BleedScene3D** is openly available
-on [Kaggle](https://www.kaggle.com/datasets/sannera/bleedscene3d). It includes **574 annotated volumes** from multiple
-open datasets with harmonized scene graph annotations.
+The BleedScene3D dataset provides 574 annotated volumes from multiple source datasets, with harmonized scene graph annotations.
+
+The dataset and its documentation are available on [Kaggle](https://www.kaggle.com/datasets/sannera/bleedscene3d).
+
+**Important:** Source medical images are **not hosted** in the BleedScene3D repository. To work with the annotations, you must obtain the relevant source images separately from their original providers. Please follow the source-specific access instructions and applicable data-use conditions provided in the Kaggle documentation.
+
+The Kaggle documentation also describes how to obtain and process the source data for use with BleedScene3D, including the reconstruction of 3D volumes where required.
 
 ### 🧩 2. Load our Scene Graphs with Python
 
-Use our `scene-graph-api` library to open, and manipulate scene graphs. It contains all the necessary data structures to
+Use our `scene-graph-api` library to open and manipulate scene graphs. It contains all the necessary data structures to
 inspect data and serves as a bridge between data annotation and Deep Learning experiments.
 The [README](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/scene-graph-api) will guide through the
 installation process.
 
-### 🎨 3. Visualize our Scene Graphs
+### 🎨 3. Inspect and Visualize our Scene Graphs
 
-Visualizing 3D Scene Graphs requires specialized tools. Thankfully, our annotation tool also provides an intuitive UI to
-visually inspect the annotated ground truth.
+Our 3D Slicer tools provide an interface for visually inspecting annotated ground truth in 3D medical images.
 Installation instructions are
-available [here](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/3d-slicer-modules)
+available in the [3D Slicer modules repository](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/3d-slicer-modules)
 
 **Note**: our stand-alone tool available [here](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/scene-graph-annotation) is deprecated but still usable.
 
 ### 🖋️ 4. Annotate or Extend the Dataset
 
-If you already went through the previous step, then you are already familiar with our Scene Graph annotation tool.
-To fully annotate new images, you will first have to localize objects first.
+The scene graph annotation tools can also be used to annotate new images or extend existing annotations. To fully annotate new images, objects must first be localized.
+
 Our 3D Slicer [extension](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/3d-slicer-modules) can help you
-streamline this process.
+streamline this workflow.
+
+Please consult the annotation protocols and dataset documentation on [Kaggle](https://www.kaggle.com/datasets/sannera/bleedscene3d) for guidance on the BleedScene3D annotation conventions.
 
 > 💬 **Having trouble configuring our tools?** Feel free to reach out or open a GitHub issue!
-
-> 📘 Detailed annotation protocols for our datasets are also available
-> on [Kaggle](https://www.kaggle.com/datasets/sannera/bleedscene3d).
 
 ### 🧠 5. Train and Evaluate Models
 
@@ -55,8 +57,8 @@ For training Scene Graph Generation (SGG) or detection models:
 - Or use the
   `federated-scene-graph-prediction` [library](https://github.com/MECLabTUDA/VoxelSceneGraph/tree/main/federated-scene-graph-generation)
   for privacy-preserving Federated Learning setups.
-
-Each framework comes with ready-to-run configs reproducing our published experiments.
+  
+Please consult the annotation protocols and dataset documentation on Kaggle for guidance on the BleedScene3D annotation conventions.
 
 ## 📦 Repository Overview
 
